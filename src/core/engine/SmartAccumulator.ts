@@ -49,11 +49,6 @@ export class SmartAccumulator {
     this.isRunning = true;
 
     useSystemStore.getState().setRunning(true);
-    useNotificationStore.getState().addNotification({
-      type: 'info',
-      title: '🤖 ABBI Aktif 24/7',
-      message: 'Smart Accumulator mulai memantau pasar dan mengelola portofolio...',
-    });
 
     await this.scan();
     this.scanInterval = setInterval(() => this.scan(), SCAN_INTERVAL_MINUTES * 60 * 1000);
@@ -61,17 +56,13 @@ export class SmartAccumulator {
   }
 
   stop() {
+    if (!this.isRunning) return;
     this.isRunning = false;
     if (this.scanInterval) {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
     useSystemStore.getState().setRunning(false);
-    useNotificationStore.getState().addNotification({
-      type: 'warning',
-      title: 'ABBI Dihentikan',
-      message: 'Bot berhenti. Posisi existing tetap dimonitor.',
-    });
   }
 
   // ============================================================
@@ -109,11 +100,6 @@ export class SmartAccumulator {
 
     } catch (err) {
       console.error('[ABBI] Scan error:', err);
-      useNotificationStore.getState().addNotification({
-        type: 'error',
-        title: 'Scan Error',
-        message: 'Gagal scanning. ABBI akan retry di cycle berikutnya.',
-      });
     }
   }
 
@@ -174,11 +160,6 @@ export class SmartAccumulator {
         this.dailyInvested += alloc.amountIdr;
       } else {
         console.error(`[ABBI] Buy failed for ${alloc.symbol}:`, result.error);
-        useNotificationStore.getState().addNotification({
-          type: 'error',
-          title: `Buy Failed: ${alloc.symbol}`,
-          message: result.error || 'Unknown error',
-        });
       }
     }
   }
@@ -207,11 +188,6 @@ export class SmartAccumulator {
             tp1Triggered: true,
             quantity: pos.quantity - sellQty,
           });
-          useNotificationStore.getState().addNotification({
-            type: 'success',
-            title: `🎯 TP1 Hit: ${pos.symbol}`,
-            message: `Sold 50% @ Rp${currentPrice.toLocaleString('id-ID')} (+${(pnlPct*100).toFixed(1)}%)`,
-          });
         }
       }
 
@@ -220,11 +196,6 @@ export class SmartAccumulator {
         const result = await this.executeSell(pos.symbol, sellQty, currentPrice, 'TP2');
         if (result.success) {
           useTradingStore.getState().removePosition(pos.symbol);
-          useNotificationStore.getState().addNotification({
-            type: 'success',
-            title: `🎯 TP2 Hit: ${pos.symbol}`,
-            message: `Sold remaining @ Rp${currentPrice.toLocaleString('id-ID')} (+${(pnlPct*100).toFixed(1)}%)`,
-          });
         }
       }
     }
@@ -349,11 +320,6 @@ export class SmartAccumulator {
     };
     useTradingStore.getState().addTrade(trade);
 
-    useNotificationStore.getState().addNotification({
-      type: 'success',
-      title: `🛒 Auto-Entry: ${validSymbol}`,
-      message: `${quantity.toFixed(6)} @ Rp${validPrice.toLocaleString('id-ID')} = Rp${amountIdr.toLocaleString('id-ID')}`,
-    });
   }
 
   // ============================================================
@@ -385,11 +351,6 @@ export class SmartAccumulator {
     });
 
     if (underweight.length > 0) {
-      useNotificationStore.getState().addNotification({
-        type: 'info',
-        title: '📊 Rebalance Opportunity',
-        message: `${underweight.length} coin underweight vs target allocation`,
-      });
     }
   }
 

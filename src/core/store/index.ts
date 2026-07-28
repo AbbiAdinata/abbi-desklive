@@ -48,7 +48,7 @@ export const useSystemStore = create<SystemState>()(
           status: { ...state.status, lastScan: time, nextScan: new Date(Date.now() + 15 * 60000).toISOString() },
         })),
     }),
-    { name: 'abbi-system' }
+    { name: 'abbi-system-v2' }
   )
 );
 
@@ -94,7 +94,7 @@ export const useTradingStore = create<TradingState>()(
           entrySignals: signals,
         })),
     }),
-    { name: 'abbi-trading' }
+    { name: 'abbi-trading-v2' }
   )
 );
 
@@ -251,7 +251,7 @@ export const useCircuitBreakerStore = create<CircuitBreakerState>()(
         return new Date() >= new Date(status.cooldownUntil);
       },
     }),
-    { name: 'abbi-circuit-breaker' }
+    { name: 'abbi-circuit-breaker-v2' }
   )
 );
 
@@ -293,6 +293,6 @@ export const useRotationPoolStore = create<RotationPoolState>()(
           pool: { ...state.pool, note },
         })),
     }),
-    { name: 'abbi-rotation-pool' }
+    { name: 'abbi-rotation-pool-v2' }
   )
 );
