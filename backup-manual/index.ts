@@ -119,7 +119,7 @@ export interface TradeHistory {
 export interface CircuitBreakerStatus {
   isActive: boolean;
   triggeredAt: string | null;
-  triggeredBy: 'portfolio_drawdown' | 'btc_crash' | null;
+  triggeredBy: 'portfolio_drawdown' | 'btc_crash' | 'manual' | null;
   drawdownPercent: number;
   cooldownUntil: string | null;
 }
@@ -143,6 +143,7 @@ export interface RotationPool {
   targetPercent: number;
   currentPercent: number;
   lastRebalanced: string | null;
+  isManualMode: boolean;
   note: string;
 }
 

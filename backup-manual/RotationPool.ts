@@ -6,8 +6,8 @@ import type { RotationPool } from '../types';
 import { useRotationPoolStore, useNotificationStore } from '../store';
 
 export class RotationPoolEngine {
-  // Auto mode — engine mengelola rotasi otomatis berdasarkan kondisi market
-  // Memberikan rekomendasi & tracking untuk eksekusi otomatis
+  // Manual mode — user mengelola via HP/Indodax
+  // Engine ini hanya memberikan rekomendasi & tracking
 
   getStatus(): RotationPool {
     return useRotationPoolStore.getState().pool;
@@ -50,7 +50,7 @@ export class RotationPoolEngine {
     };
   }
 
-  // Alert jika perlu rotasi otomatis
+  // Alert jika perlu rotasi manual
   checkAndNotify() {
     const rec = this.getRecommendation();
 

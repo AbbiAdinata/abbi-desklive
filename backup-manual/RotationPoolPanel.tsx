@@ -2,7 +2,7 @@
 // ABBI DeskLive — Rotation Pool Panel (UI Rotation Pool)
 // ============================================================
 
-import { Wallet, Info, ArrowRightLeft } from 'lucide-react';
+import { Wallet, Smartphone, Info, ArrowRightLeft } from 'lucide-react';
 import { useRotationPoolStore } from '@core/store';
 import { rotationPoolEngine } from '@core/engine/RotationPool';
 import { formatIdr } from '@core/utils';
@@ -27,6 +27,16 @@ export function RotationPoolPanel() {
         <p className="text-sm text-slate-400 mb-1">Saldo Tersedia</p>
         <p className="text-3xl font-bold text-white">{formatIdr(pool.stablecoinBalance)}</p>
         <p className="text-sm text-slate-500 mt-1">Target: {pool.targetPercent}% | Current: {pool.currentPercent.toFixed(1)}%</p>
+      </div>
+
+      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-4">
+        <div className="flex items-start gap-2">
+          <Smartphone className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-400">Mode Manual Aktif</p>
+            <p className="text-xs text-slate-400 mt-0.5">{pool.note}</p>
+          </div>
+        </div>
       </div>
 
       <div className={`p-3 rounded-lg border mb-4 ${
@@ -55,7 +65,7 @@ export function RotationPoolPanel() {
 
       <div className="flex items-start gap-2 text-xs text-slate-500">
         <Info className="w-3 h-3 mt-0.5 shrink-0" />
-        <p>Rotation pool dikelola otomatis oleh ABBI berdasarkan rekomendasi engine dan kondisi pasar.</p>
+        <p>Rotation pool dikelola manual melalui aplikasi Indodax di HP Anda. ABBI hanya memberikan rekomendasi.</p>
       </div>
     </div>
   );

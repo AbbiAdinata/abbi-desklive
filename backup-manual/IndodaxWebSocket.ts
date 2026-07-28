@@ -36,7 +36,7 @@ export class IndodaxWebSocket {
   private baseReconnectDelay = 1000;
   private maxReconnectDelay = 30000;
   private messageId = 1;
-  private isIntentionalDisconnect = false;
+  private isManualDisconnect = false;
   private isAuthenticated = false;
   private pendingSubscriptions: { type: string; pair: string }[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -108,7 +108,7 @@ export class IndodaxWebSocket {
       this.onDisconnected?.();
       
       // ✅ FIX: Kalau auth fail terus, jangan reconnect — switch ke fallback
-      if (!this.isIntentionalDisconnect && event.code !== 1000 && !this.isFallbackMode) {
+      if (!this.isManualDisconnect && event.code !== 1000 && !this.isFallbackMode) {
         if (this.authFailureCount >= this.maxAuthFailures) {
           console.warn('[WS] Auth failed 3x, switching to REST polling fallback');
           this.enableFallbackMode();
@@ -116,7 +116,7 @@ export class IndodaxWebSocket {
         }
         this.attemptReconnect();
       }
-      this.isIntentionalDisconnect = false;
+      this.isManualDisconnect = false;
     };
   }
 
@@ -357,14 +357,14 @@ export class IndodaxWebSocket {
   }
 
   disconnect() {
-    this.isIntentionalDisconnect = true;
+    this.isManualDisconnect = true;
     this.stopHeartbeat();
     this.stopRestPolling(); // ✅ FIX: Bersihkan REST polling juga
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close(1000, 'Intentional disconnect');
+    this.ws?.close(1000, 'Manual disconnect');
     this.ws = null;
     this.isAuthenticated = false;
     this.reconnectAttempts = 0;
