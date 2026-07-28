@@ -12,7 +12,7 @@ export const APP_TAGLINE = 'Smart Accumulator Portfolio';
 // API CONFIG
 // ============================================================
 export const INDODAX_API_BASE = 'https://api.indodax.com';
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 /** API Key placeholder — frontend tidak menyimpan secret, backend yang handle auth */
 export const INDODAX_API_KEY = import.meta.env.VITE_INDODAX_API_KEY || '';

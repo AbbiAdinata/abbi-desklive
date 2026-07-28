@@ -10,7 +10,7 @@ import { Settings, Save, AlertTriangle, Key, RefreshCw, CheckCircle2 } from 'luc
 import { useSettingsStore, useSystemStore, useCircuitBreakerStore } from '@core/store';
 import { API_MODE, INDODAX_API_KEY } from '@core/constants';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://';
 
 export function SettingsView() {
   const settings = useSettingsStore();

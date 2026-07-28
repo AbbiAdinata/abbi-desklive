@@ -29,7 +29,7 @@ import { regimeEngine, type MarketRegime } from './RegimeEngine';
 import { calculateAllocations, getThreshold } from '../utils/allocation';
 import { validateSymbol, validatePrice, validateQuantity } from '../utils/validation';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://';
 
 interface ExecutionResult {
   success: boolean;

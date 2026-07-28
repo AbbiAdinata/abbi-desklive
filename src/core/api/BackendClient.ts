@@ -8,7 +8,7 @@
 // - ✅ FIX: Response format cocok dengan backend server.js
 // ============================================================
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -212,7 +212,7 @@ export class BackendClient {
   // ─── HEALTH CHECK ────────────────────────────────────────
   async healthCheck(): Promise<{ status: string; apiKeyConfigured: boolean }> {
     try {
-      const response = await fetch(`${this.baseUrl}/health`, { timeout: 5000 } as any);
+      const response = await fetch(`${this.baseUrl}/api/health`, { timeout: 5000 } as any);
       return await response.json();
     } catch {
       return { status: 'down', apiKeyConfigured: false };
