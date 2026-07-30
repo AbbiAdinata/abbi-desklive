@@ -1,39 +1,66 @@
 // ============================================================
-// ABBI DeskLive — Backend Auto Scanner (24/7 VPS)
-// FIXED: Pakai ticker real Indodax (candle historis tidak tersedia publik)
+// ABBI DeskLive — Backend Auto Scanner (A+D: Sideways 85 + Volatil Focus)
 // ============================================================
 
 const axios = require('axios');
 
 const SCAN_INTERVAL_MS = 15 * 60 * 1000;
-const PAIRS = [
-  'btc_idr', 'eth_idr', 'sol_idr', 'bnb_idr', 'xrp_idr',
-  'jup_idr', 'pyth_idr', 'ada_idr', 'avax_idr', 'sui_idr',
-  'link_idr', 'dot_idr', 'matic_idr', 'near_idr', 'arb_idr',
-  'op_idr', 'sei_idr', 'inj_idr', 'render_idr', 'tia_idr'
+
+// OPSI D: Fokus coin volatil, tetap bobot market cap
+const COIN_CONFIG = [
+  // Tier 1: Large cap (stabil, jarang entry)
+  { pair: 'btc_idr', symbol: 'BTC', weight: 0.40, volatil: false },
+  { pair: 'eth_idr', symbol: 'ETH', weight: 0.20, volatil: false },
+  
+  // Tier 2: Mid-large (moderat)
+  { pair: 'sol_idr', symbol: 'SOL', weight: 0.10, volatil: true },
+  { pair: 'bnb_idr', symbol: 'BNB', weight: 0.10, volatil: false },
+  
+  // Tier 3: Mid cap (volatil, sering swing)
+  { pair: 'xrp_idr', symbol: 'XRP', weight: 0.05, volatil: true },
+  { pair: 'ada_idr', symbol: 'ADA', weight: 0.03, volatil: true },
+  { pair: 'avax_idr', symbol: 'AVAX', weight: 0.03, volatil: true },
+  { pair: 'link_idr', symbol: 'LINK', weight: 0.02, volatil: true },
+  { pair: 'dot_idr', symbol: 'DOT', weight: 0.02, volatil: true },
+  
+  // Tier 4: Low cap (paling volatil)
+  { pair: 'matic_idr', symbol: 'MATIC', weight: 0.02, volatil: true },
+  { pair: 'near_idr', symbol: 'NEAR', weight: 0.02, volatil: true },
+  { pair: 'arb_idr', symbol: 'ARB', weight: 0.015, volatil: true },
+  { pair: 'op_idr', symbol: 'OP', weight: 0.015, volatil: true },
+  { pair: 'sei_idr', symbol: 'SEI', weight: 0.015, volatil: true },
+  { pair: 'sui_idr', symbol: 'SUI', weight: 0.015, volatil: true },
+  
+  // Tier 5: Growth (paling volatil, sering diskon dalam)
+  { pair: 'inj_idr', symbol: 'INJ', weight: 0.01, volatil: true },
+  { pair: 'render_idr', symbol: 'RENDER', weight: 0.01, volatil: true },
+  { pair: 'tia_idr', symbol: 'TIA', weight: 0.01, volatil: true },
+  { pair: 'jup_idr', symbol: 'JUP', weight: 0.01, volatil: true },
+  { pair: 'pyth_idr', symbol: 'PYTH', weight: 0.01, volatil: true },
 ];
 
+// OPSI A: Threshold sideways turun ke 85 (VERY STRONG ONLY)
 const THRESHOLDS = {
-  btc_idr: { bear: 50, bull: 75, sideways: 999 },
-  eth_idr: { bear: 45, bull: 70, sideways: 999 },
-  sol_idr: { bear: 45, bull: 70, sideways: 999 },
-  bnb_idr: { bear: 45, bull: 70, sideways: 999 },
-  xrp_idr: { bear: 40, bull: 65, sideways: 999 },
-  ada_idr: { bear: 40, bull: 65, sideways: 999 },
-  avax_idr: { bear: 40, bull: 65, sideways: 999 },
-  link_idr: { bear: 40, bull: 65, sideways: 999 },
-  dot_idr: { bear: 40, bull: 65, sideways: 999 },
-  matic_idr: { bear: 40, bull: 65, sideways: 999 },
-  near_idr: { bear: 38, bull: 62, sideways: 999 },
-  arb_idr: { bear: 38, bull: 62, sideways: 999 },
-  op_idr: { bear: 38, bull: 62, sideways: 999 },
-  sei_idr: { bear: 38, bull: 62, sideways: 999 },
-  sui_idr: { bear: 38, bull: 62, sideways: 999 },
-  inj_idr: { bear: 35, bull: 60, sideways: 999 },
-  render_idr: { bear: 35, bull: 60, sideways: 999 },
-  tia_idr: { bear: 35, bull: 60, sideways: 999 },
-  jup_idr: { bear: 35, bull: 60, sideways: 999 },
-  pyth_idr: { bear: 35, bull: 60, sideways: 999 },
+  btc_idr: { bear: 50, bull: 75, sideways: 85 },
+  eth_idr: { bear: 45, bull: 70, sideways: 85 },
+  sol_idr: { bear: 45, bull: 70, sideways: 85 },
+  bnb_idr: { bear: 45, bull: 70, sideways: 85 },
+  xrp_idr: { bear: 40, bull: 65, sideways: 85 },
+  ada_idr: { bear: 40, bull: 65, sideways: 85 },
+  avax_idr: { bear: 40, bull: 65, sideways: 85 },
+  link_idr: { bear: 40, bull: 65, sideways: 85 },
+  dot_idr: { bear: 40, bull: 65, sideways: 85 },
+  matic_idr: { bear: 40, bull: 65, sideways: 85 },
+  near_idr: { bear: 38, bull: 62, sideways: 85 },
+  arb_idr: { bear: 38, bull: 62, sideways: 85 },
+  op_idr: { bear: 38, bull: 62, sideways: 85 },
+  sei_idr: { bear: 38, bull: 62, sideways: 85 },
+  sui_idr: { bear: 38, bull: 62, sideways: 85 },
+  inj_idr: { bear: 35, bull: 60, sideways: 85 },
+  render_idr: { bear: 35, bull: 60, sideways: 85 },
+  tia_idr: { bear: 35, bull: 60, sideways: 85 },
+  jup_idr: { bear: 35, bull: 60, sideways: 85 },
+  pyth_idr: { bear: 35, bull: 60, sideways: 85 },
 };
 
 const BUDGET_LOW = 300000;
@@ -49,8 +76,6 @@ function log(msg) {
   console.log(`[AutoScanner ${new Date().toISOString()}] ${msg}`);
 }
 
-// ─── Fetch REAL ticker from Indodax ─────────────────────
-
 async function fetchTicker(pair) {
   try {
     const res = await axios.get(`https://indodax.com/api/ticker/${pair}`, { timeout: 10000 });
@@ -61,31 +86,25 @@ async function fetchTicker(pair) {
   }
 }
 
-// ─── Generate realistic price history from real data ─────
-// Indodax tidak punya public candle API, jadi kita interpolasi
-// dari high/low/last + seeded deterministik (bukan random!)
+// ─── Generate price history from REAL high/low/last ─────
+// BUKAN random! Interpolasi deterministik dari data real Indodax
 
 function generatePriceHistory(last, high, low, count = 250) {
   const prices = [];
   const range = high - low || last * 0.1;
-  
-  // Generate realistic walk from low to last price
   let price = low;
   const step = (last - low) / count;
   
   for (let i = 0; i < count; i++) {
-    // Add small noise (max 2% of range) — deterministik
+    // Noise deterministik (sinusoidal), BUKAN random
     const noise = Math.sin(i * 0.1) * range * 0.02;
     price += step + noise;
     prices.push(Math.max(low * 0.95, Math.min(high * 1.05, price)));
   }
   
-  // Force last price exact
-  prices[prices.length - 1] = last;
+  prices[prices.length - 1] = last; // Force exact last price
   return prices;
 }
-
-// ─── Technical Indicators ────────────────────────────────
 
 function calcMA(prices, period) {
   if (prices.length < period) return prices[prices.length - 1] || 0;
@@ -114,8 +133,6 @@ function calcBollinger(prices, period = 20) {
   return { upper: ma + 2 * sd, middle: ma, lower: ma - 2 * sd };
 }
 
-// ─── Score Calculation ───────────────────────────────────
-
 function calcScore(price, ma20, ma50, ma200, rsi, bbLower, bbUpper, prices) {
   let trendScore = 0;
   if (price < ma200 && ma50 < ma200 * 1.02) trendScore = 28;
@@ -141,8 +158,6 @@ function calcScore(price, ma20, ma50, ma200, rsi, bbLower, bbUpper, prices) {
   return Math.min(100, Math.round(trendScore + valScore + supScore));
 }
 
-// ─── Detect Market Regime via BTC ────────────────────────
-
 async function detectRegime() {
   const ticker = await fetchTicker('btc_idr');
   if (!ticker) return 'bear';
@@ -151,7 +166,6 @@ async function detectRegime() {
   const high = parseFloat(ticker.high);
   const low = parseFloat(ticker.low);
   
-  // Approximate MA200 from generated history
   const prices = generatePriceHistory(last, high, low);
   const ma200 = calcMA(prices, 200);
   
@@ -160,10 +174,8 @@ async function detectRegime() {
   return 'sideways';
 }
 
-// ─── Core: Scan Single Coin ─────────────────────────────
-
-async function scanCoin(pair, regime) {
-  const symbol = pair.replace('_idr', '').toUpperCase();
+async function scanCoin(config, regime) {
+  const { pair, symbol, weight, volatil } = config;
   
   const ticker = await fetchTicker(pair);
   if (!ticker) {
@@ -175,7 +187,7 @@ async function scanCoin(pair, regime) {
   const high = parseFloat(ticker.high);
   const low = parseFloat(ticker.low);
 
-  // Generate realistic history from real high/low/last
+  // Generate history from REAL data
   const prices = generatePriceHistory(last, high, low);
   
   const ma20 = calcMA(prices, 20);
@@ -187,7 +199,7 @@ async function scanCoin(pair, regime) {
   const score = calcScore(last, ma20, ma50, ma200, rsi, bb.lower, bb.upper, prices);
   const threshold = THRESHOLDS[pair]?.[regime] || 70;
 
-  log(`${pair}: Price=${last.toLocaleString('id-ID')} | MA20=${ma20.toFixed(0)} | MA50=${ma50.toFixed(0)} | MA200=${ma200.toFixed(0)} | RSI=${rsi.toFixed(1)} | Score=${score} | Threshold=${threshold}`);
+  log(`${pair}: Price=${last.toLocaleString('id-ID')} | RSI=${rsi.toFixed(1)} | Score=${score} | Threshold=${threshold} | Volatil=${volatil}`);
 
   if (score < threshold) {
     log(`${pair}: Score ${score} < ${threshold} → SKIP`);
@@ -199,14 +211,12 @@ async function scanCoin(pair, regime) {
     return null;
   }
 
-  // Check 20-day low
   const low20d = Math.min(...prices.slice(-20));
   if (last > low20d * 1.02) {
-    log(`${pair}: Not at 20-day low (${last.toLocaleString('id-ID')} > ${low20d.toLocaleString('id-ID')}) → SKIP`);
+    log(`${pair}: Not at 20-day low → SKIP`);
     return null;
   }
 
-  // Check daily budget
   const today = new Date().toDateString();
   if (today !== lastResetDate) {
     dailyInvested = 0;
@@ -214,7 +224,15 @@ async function scanCoin(pair, regime) {
     log('Daily budget reset');
   }
 
-  const budget = score >= 85 ? BUDGET_HIGH : BUDGET_LOW;
+  // Budget berdasarkan score + weight
+  const baseBudget = score >= 85 ? BUDGET_HIGH : BUDGET_LOW;
+  const budget = Math.floor(baseBudget * weight * 5); // Multiply by 5 to normalize weights
+  
+  if (budget < MIN_TRADE) {
+    log(`${pair}: Budget Rp${budget.toLocaleString('id-ID')} < MIN_TRADE → SKIP`);
+    return null;
+  }
+  
   if (dailyInvested + budget > 6000000) {
     log(`Daily budget exhausted: Rp${dailyInvested.toLocaleString('id-ID')}`);
     return null;
@@ -226,11 +244,9 @@ async function scanCoin(pair, regime) {
     score,
     price: last,
     budget,
-    reason: `Score ${score} ≥ ${threshold} | RSI ${rsi.toFixed(1)} | At 20-day low`,
+    reason: `Score ${score} ≥ ${threshold} | RSI ${rsi.toFixed(1)} | Weight ${(weight*100).toFixed(0)}%`,
   };
 }
-
-// ─── Execute Buy ────────────────────────────────────────
 
 async function executeBuy(signal) {
   try {
@@ -259,8 +275,6 @@ async function executeBuy(signal) {
   }
 }
 
-// ─── Main Scan Loop ──────────────────────────────────────
-
 async function scanOnce() {
   if (scanning) {
     log('Scan sebelumnya masih jalan, skip.');
@@ -274,15 +288,17 @@ async function scanOnce() {
     const regime = await detectRegime();
     log(`Regime: ${regime.toUpperCase()}`);
 
-    if (regime === 'sideways') {
-      log('Sideways → skip entries');
-      return;
-    }
+    // Prioritaskan coin volatil dulu
+    const sortedCoins = [...COIN_CONFIG].sort((a, b) => {
+      if (a.volatil && !b.volatil) return -1;
+      if (!a.volatil && b.volatil) return 1;
+      return b.weight - a.weight;
+    });
 
     const signals = [];
-    for (const pair of PAIRS) {
+    for (const coin of sortedCoins) {
       await new Promise(r => setTimeout(r, 500));
-      const signal = await scanCoin(pair, regime);
+      const signal = await scanCoin(coin, regime);
       if (signal) signals.push(signal);
     }
 
@@ -302,8 +318,6 @@ async function scanOnce() {
   log(`Next scan in ${SCAN_INTERVAL_MS / 60000} menit`);
   log('══════════════════════════════════════════');
 }
-
-// ─── Public API ─────────────────────────────────────────
 
 function startAutoScanner() {
   log(`Aktif. Interval: ${SCAN_INTERVAL_MS / 60000} menit.`);
