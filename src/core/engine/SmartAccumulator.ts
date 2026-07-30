@@ -1,12 +1,6 @@
 // ============================================================
 // ABBI DeskLive — Smart Accumulator (OTAK UTAMA — V5 FINAL)
-// ============================================================
-// MODE: 24/7 FULL AUTO
-// TP1: +10% fixed → sell 50%
-// TP2: +15% fixed → sell remaining 50%
-// Budget: Signal-tier (300k/500k) × MarketCapWeight
-// Position Limits: Prevents altcoin overexposure
-// Entry: New 20-day low only
+// FIXED: 1 entry per coin guard + data real dari DiscountScanner
 // ============================================================
 
 import type { EntrySignal, Position, TradeHistory } from '../types';
@@ -29,7 +23,7 @@ import { regimeEngine, type MarketRegime } from './RegimeEngine';
 import { calculateAllocations, getThreshold } from '../utils/allocation';
 import { validateSymbol, validatePrice, validateQuantity } from '../utils/validation';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
 
 interface ExecutionResult {
   success: boolean;
@@ -49,6 +43,11 @@ export class SmartAccumulator {
     this.isRunning = true;
 
     useSystemStore.getState().setRunning(true);
+    useNotificationStore.getState().addNotification({
+      type: 'info',
+      title: '🤖 ABBI Aktif 24/7',
+      message: 'Smart Accumulator mulai memantau pasar dan mengelola portofolio...',
+    });
 
     await this.scan();
     this.scanInterval = setInterval(() => this.scan(), SCAN_INTERVAL_MINUTES * 60 * 1000);
@@ -56,13 +55,17 @@ export class SmartAccumulator {
   }
 
   stop() {
-    if (!this.isRunning) return;
     this.isRunning = false;
     if (this.scanInterval) {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
     useSystemStore.getState().setRunning(false);
+    useNotificationStore.getState().addNotification({
+      type: 'warning',
+      title: 'ABBI Dihentikan',
+      message: 'Bot berhenti. Posisi existing tetap dimonitor.',
+    });
   }
 
   // ============================================================
@@ -100,11 +103,17 @@ export class SmartAccumulator {
 
     } catch (err) {
       console.error('[ABBI] Scan error:', err);
+      useNotificationStore.getState().addNotification({
+        type: 'error',
+        title: 'Scan Error',
+        message: 'Gagal scanning. ABBI akan retry di cycle berikutnya.',
+      });
     }
   }
 
   // ============================================================
   // ENTRY EVALUATION (Auto-Buy)
+  // FIXED: 1 entry per coin — skip kalau sudah ada posisi aktif
   // ============================================================
 
   private async evaluateEntries(signals: EntrySignal[], regime: MarketRegime) {
@@ -134,18 +143,16 @@ export class SmartAccumulator {
     );
 
     for (const alloc of allocations) {
+      // ✅ FIX: 1 entry per coin — skip kalau sudah punya posisi aktif
       const existing = positions.find((p) => p.symbol === alloc.symbol);
+      if (existing && existing.status !== 'fully_exited') {
+        console.log(`[ABBI] Skip ${alloc.symbol}: already have active position (1 entry per coin rule)`);
+        continue;
+      }
 
       // Ambil harga terkini untuk dikirim ke backend
       const ticker = await discountScanner.getTicker(alloc.symbol);
       const currentPrice = ticker?.price || 0;
-
-      if (existing) {
-        if (currentPrice >= existing.avgEntryPrice * 0.95) {
-          console.log(`[ABBI] Skip ${alloc.symbol}: not at new lower support`);
-          continue;
-        }
-      }
 
       if (currentPrice <= 0) {
         console.warn(`[ABBI] Skip ${alloc.symbol}: invalid price ${currentPrice}`);
@@ -160,6 +167,11 @@ export class SmartAccumulator {
         this.dailyInvested += alloc.amountIdr;
       } else {
         console.error(`[ABBI] Buy failed for ${alloc.symbol}:`, result.error);
+        useNotificationStore.getState().addNotification({
+          type: 'error',
+          title: `Buy Failed: ${alloc.symbol}`,
+          message: result.error || 'Unknown error',
+        });
       }
     }
   }
@@ -188,6 +200,11 @@ export class SmartAccumulator {
             tp1Triggered: true,
             quantity: pos.quantity - sellQty,
           });
+          useNotificationStore.getState().addNotification({
+            type: 'success',
+            title: `🎯 TP1 Hit: ${pos.symbol}`,
+            message: `Sold 50% @ Rp${currentPrice.toLocaleString('id-ID')} (+${(pnlPct*100).toFixed(1)}%)`,
+          });
         }
       }
 
@@ -196,6 +213,11 @@ export class SmartAccumulator {
         const result = await this.executeSell(pos.symbol, sellQty, currentPrice, 'TP2');
         if (result.success) {
           useTradingStore.getState().removePosition(pos.symbol);
+          useNotificationStore.getState().addNotification({
+            type: 'success',
+            title: `🎯 TP2 Hit: ${pos.symbol}`,
+            message: `Sold remaining @ Rp${currentPrice.toLocaleString('id-ID')} (+${(pnlPct*100).toFixed(1)}%)`,
+          });
         }
       }
     }
@@ -320,6 +342,11 @@ export class SmartAccumulator {
     };
     useTradingStore.getState().addTrade(trade);
 
+    useNotificationStore.getState().addNotification({
+      type: 'success',
+      title: `🛒 Auto-Entry: ${validSymbol}`,
+      message: `${quantity.toFixed(6)} @ Rp${validPrice.toLocaleString('id-ID')} = Rp${amountIdr.toLocaleString('id-ID')}`,
+    });
   }
 
   // ============================================================
@@ -351,6 +378,11 @@ export class SmartAccumulator {
     });
 
     if (underweight.length > 0) {
+      useNotificationStore.getState().addNotification({
+        type: 'info',
+        title: '📊 Rebalance Opportunity',
+        message: `${underweight.length} coin underweight vs target allocation`,
+      });
     }
   }
 

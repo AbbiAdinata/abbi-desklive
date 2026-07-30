@@ -14,6 +14,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
+const { startAutoScanner } = require('./engine/AutoScanner');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -535,6 +536,8 @@ app.get('/api/indodax/depth/:pair', async (req, res) => {
   }
 });
 
+startAutoScanner();
+
 app.listen(PORT, () => {
   console.log('============================================================');
   console.log('  ABBI DeskLive — Secure Backend Proxy FINAL');
@@ -560,3 +563,7 @@ app.listen(PORT, () => {
   console.log('    GET  /health');
   console.log('============================================================');
 });
+
+// ═══════════════════════════════════════════════════════════
+// AUTO SCANNER (24/7 Backend)
+// ═══════════════════════════════════════════════════════════

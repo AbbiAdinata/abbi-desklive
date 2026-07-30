@@ -1,9 +1,9 @@
 // ============================================================
-// ABBI DeskLive — AI Analysis Panel
+// ABBI DeskLive — AI Analysis Panel (FIXED: Rupiah)
 // ============================================================
 
 import { useState, useEffect } from 'react';
-import { Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Brain, TrendingUp } from 'lucide-react';
 import { useTradingStore, useUIStore } from '@core/store';
 import { indodaxClient } from '@core/engine/IndodaxClient';
 import { generateAIAnalysis } from '@core/utils';
@@ -61,6 +61,7 @@ export function AIAnalysisPanel() {
   }, [selectedCoin, entrySignals]);
 
   const colors = analysis ? AI_VERDICT_COLORS[analysis.verdict] : AI_VERDICT_COLORS.HOLD;
+  const fmtIdr = (n: number) => 'Rp ' + n.toLocaleString('id-ID');
 
   return (
     <div className="abbi-card p-6">
@@ -102,19 +103,19 @@ export function AIAnalysisPanel() {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
               <p className="text-xs text-red-400 mb-1">Resistance</p>
-              <p className="text-lg font-bold text-white">${analysis.resistancePrice.toLocaleString()}</p>
+              <p className="text-lg font-bold text-white">{fmtIdr(analysis.resistancePrice)}</p>
             </div>
             <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
               <p className="text-xs text-emerald-400 mb-1">Discount Zone</p>
-              <p className="text-lg font-bold text-white">${analysis.discountPrice.toLocaleString()}</p>
+              <p className="text-lg font-bold text-white">{fmtIdr(analysis.discountPrice)}</p>
             </div>
             <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <p className="text-xs text-amber-400 mb-1">Fair Value</p>
-              <p className="text-lg font-bold text-white">${analysis.fairValue.toLocaleString()}</p>
+              <p className="text-lg font-bold text-white">{fmtIdr(analysis.fairValue)}</p>
             </div>
             <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <p className="text-xs text-blue-400 mb-1">Support</p>
-              <p className="text-lg font-bold text-white">${analysis.supportPrice.toLocaleString()}</p>
+              <p className="text-lg font-bold text-white">{fmtIdr(analysis.supportPrice)}</p>
             </div>
           </div>
 
@@ -129,7 +130,7 @@ export function AIAnalysisPanel() {
           </div>
           <div className="flex justify-between text-xs text-slate-500">
             <span>Support</span>
-            <span className="text-white font-medium">Current: ${analysis.currentPrice.toLocaleString()}</span>
+            <span className="text-white font-medium">Current: {fmtIdr(analysis.currentPrice)}</span>
             <span>Resistance</span>
           </div>
 

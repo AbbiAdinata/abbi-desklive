@@ -1,5 +1,7 @@
 // ============================================================
 // ABBI DeskLive — Discount Scanner (Scan 20 Coin)
+// FIXED: generateMockPriceHistory → fetchCandles real dari Indodax
+// Fallback ke mock hanya kalau API gagal
 // ============================================================
 
 import type { EntrySignal, SupportResistanceLevel, TickerData } from '../types';
@@ -210,13 +212,14 @@ export class DiscountScanner {
   }
 
   async scanCoin(symbol: string, currentPrice: number): Promise<EntrySignal> {
-    const mockPrices = this.generateMockPriceHistory(currentPrice, symbol);
+    // ✅ FIX: Ambil histori harga real dari Indodax, fallback ke mock
+    const prices = await this.getPriceHistory(symbol, currentPrice);
 
-    const ma20 = calculateMA(mockPrices, 20);
-    const ma50 = calculateMA(mockPrices, 50);
-    const ma200 = calculateMA(mockPrices, 200);
-    const rsi = calculateRSI(mockPrices);
-    const bb = calculateBollinger(mockPrices);
+    const ma20 = calculateMA(prices, 20);
+    const ma50 = calculateMA(prices, 50);
+    const ma200 = calculateMA(prices, 200);
+    const rsi = calculateRSI(prices);
+    const bb = calculateBollinger(prices);
     const supportLevels = SUPPORT_RESISTANCE_DB[symbol] || [];
 
     const scoreResult = calculateEntryScore(
@@ -255,6 +258,25 @@ export class DiscountScanner {
       confidence: scoreResult.total,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  // ✅ FIX: Ambil data real dari API, fallback ke mock
+  private async getPriceHistory(symbol: string, currentPrice: number): Promise<number[]> {
+    try {
+      const candles = await indodaxClient.fetchCandles(symbol, '1D');
+      if (candles.length >= 50) {
+        // Cek apakah mock
+        if ((candles as any).__isMock) {
+          console.warn(`[DiscountScanner] ${symbol}: API returned mock candles, using fallback`);
+        } else {
+          console.log(`[DiscountScanner] ${symbol}: using ${candles.length} real candles`);
+        }
+        return candles.map(c => c.close);
+      }
+    } catch (err) {
+      console.warn(`[DiscountScanner] ${symbol}: fetchCandles failed, using mock fallback`);
+    }
+    return this.generateMockPriceHistory(currentPrice, symbol);
   }
 
   private generateMockPriceHistory(currentPrice: number, symbol: string): number[] {

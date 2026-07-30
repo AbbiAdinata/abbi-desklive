@@ -1,5 +1,5 @@
 // ============================================================
-// ABBI DeskLive — Scale-Out Tracker (UI Scale-Out)
+// ABBI DeskLive — Scale-Out Tracker (FIXED: sync store)
 // ============================================================
 
 import { useState, useEffect } from 'react';
@@ -13,6 +13,11 @@ import type { Position } from '@core/types';
 export function ScaleOutTracker() {
   const { positions } = useTradingStore();
   const [updatedPositions, setUpdatedPositions] = useState<Position[]>(positions);
+
+  // ✅ FIX: Sync dengan store setiap positions berubah
+  useEffect(() => {
+    setUpdatedPositions(positions);
+  }, [positions]);
 
   useEffect(() => {
     const interval = setInterval(async () => {

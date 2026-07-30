@@ -84,7 +84,8 @@ export function calculateAllocations(
 
     // Position limit check
     const limitPct = POSITION_LIMITS[item.symbol] || 0.02;
-    const maxAllowedValue = portfolioValue * limitPct;
+    const effectivePortfolioValue = Math.max(portfolioValue, cashAvailable);
+    const maxAllowedValue = effectivePortfolioValue * limitPct;
     const currentValue = positionValues[item.symbol] || 0;
     const roomRemaining = maxAllowedValue - currentValue;
 
