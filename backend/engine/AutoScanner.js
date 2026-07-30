@@ -3,6 +3,7 @@
 // ============================================================
 
 const axios = require('axios');
+const { getPriceHistory, appendPrice } = require('./CoinGeckoAPI');
 
 const SCAN_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -86,26 +87,6 @@ async function fetchTicker(pair) {
   }
 }
 
-// ─── Generate price history from REAL high/low/last ─────
-// BUKAN random! Interpolasi deterministik dari data real Indodax
-
-function generatePriceHistory(last, high, low, count = 250) {
-  const prices = [];
-  const range = high - low || last * 0.1;
-  let price = low;
-  const step = (last - low) / count;
-  
-  for (let i = 0; i < count; i++) {
-    // Noise deterministik (sinusoidal), BUKAN random
-    const noise = Math.sin(i * 0.1) * range * 0.02;
-    price += step + noise;
-    prices.push(Math.max(low * 0.95, Math.min(high * 1.05, price)));
-  }
-  
-  prices[prices.length - 1] = last; // Force exact last price
-  return prices;
-}
-
 function calcMA(prices, period) {
   if (prices.length < period) return prices[prices.length - 1] || 0;
   return prices.slice(-period).reduce((a, b) => a + b, 0) / period;
@@ -166,7 +147,7 @@ async function detectRegime() {
   const high = parseFloat(ticker.high);
   const low = parseFloat(ticker.low);
   
-  const prices = generatePriceHistory(last, high, low);
+  const prices = getPriceHistory('btc_idr', last, high, low);
   const ma200 = calcMA(prices, 200);
   
   if (last < ma200 * 0.98) return 'bear';
@@ -188,13 +169,14 @@ async function scanCoin(config, regime) {
   const low = parseFloat(ticker.low);
 
   // Generate history from REAL data
-  const prices = generatePriceHistory(last, high, low);
+  const prices = getPriceHistory(pair, last, high, low);
   
   const ma20 = calcMA(prices, 20);
   const ma50 = calcMA(prices, 50);
   const ma200 = calcMA(prices, 200);
   const rsi = calcRSI(prices);
   const bb = calcBollinger(prices);
+    appendPrice(pair, last);  // [HYBRID] Save real price to cache for next scan
 
   const score = calcScore(last, ma20, ma50, ma200, rsi, bb.lower, bb.upper, prices);
   const threshold = THRESHOLDS[pair]?.[regime] || 70;
