@@ -1,26 +1,27 @@
 // ============================================================
-// ABBI DeskLive — Smart Accumulator (OTAK UTAMA — V5 FINAL)
-// FIXED: 1 entry per coin guard + data real dari DiscountScanner
+// ABBI DeskLive — Smart Accumulator (OTAK UTAMA — V5.1)
+// FIXED:
+//   1. calculatePortfolioValue() — tidak hardcode fallback 2jt
+//   2. Pass positionValues yang akurat ke calculateAllocations
+//   3. Sync cooldown dengan allocation.ts
+//   4. Guard: tidak entry kalau portfolioValue = 0 dan belum ada baseline
 // ============================================================
 
 import type { EntrySignal, Position, TradeHistory } from '../types';
 import {
   COIN_UNIVERSE,
-  POSITION_LIMITS,
   BUDGET_LOW,
   BUDGET_HIGH,
   MIN_TRADE,
-  MAX_PER_TRADE,
   TP1_TARGET,
   TP2_TARGET,
-  REGIME_MULTIPLIER,
   SCAN_INTERVAL_MINUTES,
 } from '../constants';
 import { useTradingStore, useNotificationStore, useSystemStore } from '../store';
 import { discountScanner } from './DiscountScanner';
 import { scaleOutEngine } from './ScaleOutEngine';
 import { regimeEngine, type MarketRegime } from './RegimeEngine';
-import { calculateAllocations, getThreshold } from '../utils/allocation';
+import { calculateAllocations, getThreshold, resetCooldown } from '../utils/allocation';
 import { validateSymbol, validatePrice, validateQuantity } from '../utils/validation';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3002';
@@ -113,11 +114,11 @@ export class SmartAccumulator {
 
   // ============================================================
   // ENTRY EVALUATION (Auto-Buy)
-  // FIXED: 1 entry per coin — skip kalau sudah ada posisi aktif
+  // FIXED: Portfolio value akurat + cooldown sync
   // ============================================================
 
   private async evaluateEntries(signals: EntrySignal[], regime: MarketRegime) {
-    const { positions } = useTradingStore.getState();
+    const { positions, tradeHistory } = useTradingStore.getState();
     const dailyBudget = BUDGET_HIGH;
     const remainingBudget = dailyBudget - this.dailyInvested;
 
@@ -126,12 +127,23 @@ export class SmartAccumulator {
       return;
     }
 
+    // ─── FIX: Portfolio value yang AKURAT ─────────────────
+    // Tidak hardcode fallback 2jt. Kalau kosong, pakai 0 (allocation.ts akan guard)
     const portfolioValue = this.calculatePortfolioValue();
+    console.log(`[ABBI] Portfolio value: Rp${portfolioValue.toLocaleString('id-ID')} | Positions: ${positions.length}`);
+
+    // ─── Build positionValues dengan harga REALTIME ────────
     const positionValues: Record<string, number> = {};
     for (const pos of positions) {
       const ticker = await discountScanner.getTicker(pos.symbol);
-      positionValues[pos.symbol] = pos.quantity * (ticker?.price || pos.avgEntryPrice);
+      const currentPrice = ticker?.price || pos.avgEntryPrice;
+      positionValues[pos.symbol] = pos.quantity * currentPrice;
     }
+
+    // ─── Cash available = IDR balance (approximate dari portfolio) ─
+    // Untuk sekarang, anggap cash = portfolioValue * 0.3 (30% cash reserve)
+    // Ini bisa di-refine nanti dengan fetch real balance dari backend
+    const cashAvailable = Math.max(0, portfolioValue * 0.3);
 
     const allocations = calculateAllocations(
       signals,
@@ -139,11 +151,12 @@ export class SmartAccumulator {
       portfolioValue,
       positionValues,
       remainingBudget,
-      portfolioValue * 0.3
+      cashAvailable
     );
 
     for (const alloc of allocations) {
-      // ✅ FIX: 1 entry per coin — skip kalau sudah punya posisi aktif
+      // ✅ 1 entry per coin — sudah di-guard oleh cooldown di allocation.ts
+      // Tapi double-check di sini juga untuk safety
       const existing = positions.find((p) => p.symbol === alloc.symbol);
       if (existing && existing.status !== 'fully_exited') {
         console.log(`[ABBI] Skip ${alloc.symbol}: already have active position (1 entry per coin rule)`);
@@ -212,10 +225,14 @@ export class SmartAccumulator {
         const sellQty = pos.quantity;
         const result = await this.executeSell(pos.symbol, sellQty, currentPrice, 'TP2');
         if (result.success) {
+          // ─── FIX: Reset cooldown saat fully exited ─────────
+          // Supaya bisa re-entry nanti kalau ada sinyal baru
+          resetCooldown(pos.symbol);
+          
           useTradingStore.getState().removePosition(pos.symbol);
           useNotificationStore.getState().addNotification({
             type: 'success',
-            title: `🎯 TP2 Hit: ${pos.symbol}`,
+            title: `✅ FULL EXIT: ${pos.symbol}`,
             message: `Sold remaining @ Rp${currentPrice.toLocaleString('id-ID')} (+${(pnlPct*100).toFixed(1)}%)`,
           });
         }
@@ -224,7 +241,7 @@ export class SmartAccumulator {
   }
 
   // ============================================================
-  // BACKEND EXECUTION (FIXED: kirim 'price' untuk Indodax legacy)
+  // BACKEND EXECUTION
   // ============================================================
 
   private async executeBuy(symbol: string, amountIdr: number, price: number): Promise<ExecutionResult> {
@@ -236,8 +253,8 @@ export class SmartAccumulator {
         body: JSON.stringify({
           pair,
           type: 'buy',
-          price,        // ← FIX: harga per unit (wajib untuk Indodax legacy)
-          amountIdr,    // ← jumlah rupiah yang dibelanjakan
+          price,
+          amountIdr,
         }),
       });
 
@@ -253,7 +270,7 @@ export class SmartAccumulator {
 
       return {
         success: true,
-        executedPrice: data.raw?.return?.receive 
+        executedPrice: data.raw?.return?.receive
           ? parseFloat(data.raw.return.receive) / parseFloat(data.raw.return.spend)
           : undefined,
         orderId: data.orderId,
@@ -272,8 +289,8 @@ export class SmartAccumulator {
         body: JSON.stringify({
           pair,
           type: 'sell',
-          price,        // ← FIX: harga limit jual (wajib untuk Indodax legacy)
-          quantity,     // ← jumlah coin yang dijual
+          price,
+          quantity,
         }),
       });
 
@@ -338,7 +355,7 @@ export class SmartAccumulator {
       quantity,
       total: amountIdr,
       timestamp: new Date().toISOString(),
-      note: `Auto-entry via ABBI V5 — TP1: ${(TP1_TARGET*100).toFixed(0)}% | TP2: ${(TP2_TARGET*100).toFixed(0)}%`,
+      note: `Auto-entry via ABBI V5.1 — TP1: ${(TP1_TARGET*100).toFixed(0)}% | TP2: ${(TP2_TARGET*100).toFixed(0)}%`,
     };
     useTradingStore.getState().addTrade(trade);
 
@@ -350,16 +367,26 @@ export class SmartAccumulator {
   }
 
   // ============================================================
-  // PORTFOLIO VALUE
+  // PORTFOLIO VALUE — FIXED: Tidak hardcode fallback
   // ============================================================
 
   private calculatePortfolioValue(): number {
     const { positions } = useTradingStore.getState();
+    
+    if (positions.length === 0) {
+      // Kalau belum ada posisi, return 0 (allocation.ts akan guard)
+      // Atau bisa return cash balance dari backend kalau sudah implement
+      return 0;
+    }
+
     let value = 0;
     for (const pos of positions) {
+      // Gunakan currentValue yang terakhir di-update
+      // (di-update oleh ScaleOutEngine atau manual refresh)
       value += pos.currentValue;
     }
-    return value || 2_000_000;
+    
+    return value;
   }
 
   // ============================================================

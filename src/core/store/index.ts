@@ -33,7 +33,7 @@ export const useSystemStore = create<SystemState>()(
         lastScan: null,
         nextScan: null,
         mode: 'mock',
-        version: '1.0.0',
+        version: '5.1.0',
       },
       setRunning: (running) =>
         set((state) => ({
@@ -283,6 +283,10 @@ export const useRotationPoolStore = create<RotationPoolState>()(
       updateTargetPercent: (percent) =>
         set((state) => ({
           pool: { ...state.pool, targetPercent: percent },
+        })),
+      updatePool: (updates: Partial<import("../types").RotationPool>) =>
+        set((state) => ({
+          pool: { ...state.pool, ...updates },
         })),
       setManualMode: (manual) =>
         set((state) => ({

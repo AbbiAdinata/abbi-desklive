@@ -1,11 +1,12 @@
 // ============================================================
-// ABBI DeskLive — Constants & Configuration (V5 FINAL + Backward Compat)
+// ABBI DeskLive — Constants & Configuration (V5.1)
+// FIXED: Sideways threshold = 85 (very strong only)
 // ============================================================
 
 import type { CoinConfig } from '../types';
 
 export const APP_NAME = 'ABBI DeskLive';
-export const APP_VERSION = '5.0.0';
+export const APP_VERSION = '5.1.0';
 export const APP_TAGLINE = 'Smart Accumulator Portfolio';
 
 // ============================================================
@@ -44,7 +45,7 @@ export const COIN_UNIVERSE: CoinConfig[] = [
 ];
 
 // ============================================================
-// POSITION LIMITS (% of total portfolio — prevents altcoin overexposure)
+// POSITION LIMITS (% of total portfolio)
 // ============================================================
 export const POSITION_LIMITS: Record<string, number> = {
   BTC: 0.40,
@@ -72,41 +73,42 @@ export const POSITION_LIMITS: Record<string, number> = {
 // ============================================================
 // BUDGET TIERS (Signal-based)
 // ============================================================
-export const BUDGET_LOW = 300_000;   // Score 75-84
-export const BUDGET_HIGH = 500_000;  // Score 85-100
+export const BUDGET_LOW = 300_000;
+export const BUDGET_HIGH = 500_000;
 export const MIN_TRADE = 50_000;
 export const MAX_PER_TRADE = 600_000;
 
 // ============================================================
 // EXIT PARAMETERS (V5 — Fixed TP)
 // ============================================================
-export const TP1_TARGET = 0.10;   // +10% — sell 50%
-export const TP2_TARGET = 0.15;   // +15% — sell remaining 50%
+export const TP1_TARGET = 0.10;
+export const TP2_TARGET = 0.15;
 
 // ============================================================
 // ENTRY THRESHOLDS (Coin-specific + Regime-aware)
+// FIXED: Sideways = 85 (very strong only)
 // ============================================================
 export const COIN_THRESHOLDS: Record<string, Record<string, number>> = {
-  BTC: { bear: 50, bull: 75, sideways: 999 },
-  ETH: { bear: 45, bull: 70, sideways: 999 },
-  BNB: { bear: 45, bull: 70, sideways: 999 },
-  SOL: { bear: 45, bull: 70, sideways: 999 },
-  XRP: { bear: 40, bull: 65, sideways: 999 },
-  ADA: { bear: 40, bull: 65, sideways: 999 },
-  AVAX: { bear: 40, bull: 65, sideways: 999 },
-  LINK: { bear: 40, bull: 65, sideways: 999 },
-  DOT: { bear: 40, bull: 65, sideways: 999 },
-  MATIC: { bear: 40, bull: 65, sideways: 999 },
-  NEAR: { bear: 38, bull: 62, sideways: 999 },
-  ARB: { bear: 38, bull: 62, sideways: 999 },
-  OP: { bear: 38, bull: 62, sideways: 999 },
-  SEI: { bear: 38, bull: 62, sideways: 999 },
-  SUI: { bear: 38, bull: 62, sideways: 999 },
-  INJ: { bear: 35, bull: 60, sideways: 999 },
-  RENDER: { bear: 35, bull: 60, sideways: 999 },
-  TIA: { bear: 35, bull: 60, sideways: 999 },
-  PYTH: { bear: 35, bull: 60, sideways: 999 },
-  JUP: { bear: 35, bull: 60, sideways: 999 },
+  BTC: { bear: 50, bull: 75, sideways: 85 },
+  ETH: { bear: 45, bull: 70, sideways: 85 },
+  BNB: { bear: 45, bull: 70, sideways: 85 },
+  SOL: { bear: 45, bull: 70, sideways: 85 },
+  XRP: { bear: 40, bull: 65, sideways: 85 },
+  ADA: { bear: 40, bull: 65, sideways: 85 },
+  AVAX: { bear: 40, bull: 65, sideways: 85 },
+  LINK: { bear: 40, bull: 65, sideways: 85 },
+  DOT: { bear: 40, bull: 65, sideways: 85 },
+  MATIC: { bear: 40, bull: 65, sideways: 85 },
+  NEAR: { bear: 38, bull: 62, sideways: 85 },
+  ARB: { bear: 38, bull: 62, sideways: 85 },
+  OP: { bear: 38, bull: 62, sideways: 85 },
+  SEI: { bear: 38, bull: 62, sideways: 85 },
+  SUI: { bear: 38, bull: 62, sideways: 85 },
+  INJ: { bear: 35, bull: 60, sideways: 85 },
+  RENDER: { bear: 35, bull: 60, sideways: 85 },
+  TIA: { bear: 35, bull: 60, sideways: 85 },
+  PYTH: { bear: 35, bull: 60, sideways: 85 },
+  JUP: { bear: 35, bull: 60, sideways: 85 },
 };
 
 export const REGIME_MULTIPLIER: Record<string, number> = {
@@ -160,23 +162,14 @@ export const API_MODE: 'mock' | 'live' = (envMode === 'live' || envMode === 'moc
 
 export const MAX_DAILY_INVESTMENT = 5_000_000;
 
-// Auto trade — controlled by backend, frontend only displays
 export const AUTO_TRADE_ENABLED = true;
 
 // ============================================================
-// BACKWARD COMPATIBILITY — digunakan oleh utils/index.ts & engine lama
+// BACKWARD COMPATIBILITY
 // ============================================================
-
-/** Minimum entry score untuk filter global & rebalance alert (75-85 range) */
 export const ENTRY_SCORE_MIN = 75;
-
-/** Strong entry signal threshold (85+ poin → budget HIGH 500rb) */
 export const ENTRY_SCORE_STRONG = 85;
-
-/** V3 trailing stop — ScaleOutEngine lama & utils masih mengimport */
 export const TP2_TRAILING = 0.08;
-
-/** RSI thresholds — digunakan oleh utils/index.ts interpretRSI & generateAIAnalysis */
 export const RSI_DEEP_DISCOUNT = 30;
 export const RSI_DISCOUNT_MAX = 38;
 export const RSI_FAIR_MAX = 55;

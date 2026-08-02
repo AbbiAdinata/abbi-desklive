@@ -119,7 +119,7 @@ export const SUPPORT_RESISTANCE_DB: Record<string, SupportResistanceLevel[]> = {
 
 // ─── Seeded PRNG untuk deterministik ──────────────────────
 
-function seededRandom(seed: number): number {
+function seededRandom(seed: number): () => number {
   const a = 1664525;
   const c = 1013904223;
   const m = 4294967296;
@@ -195,12 +195,12 @@ export class DiscountScanner {
     for (const coin of COIN_UNIVERSE) {
       try {
         const ticker = await indodaxClient.fetchTicker(coin.symbol);
-        
+
         if (!ticker || ticker.price === 0) {
           console.warn(`[DiscountScanner] Skipping ${coin.symbol} — not available on Indodax`);
           continue;
         }
-        
+
         const signal = await this.scanCoin(coin.symbol, ticker.price);
         signals.push(signal);
       } catch (err) {
@@ -266,7 +266,8 @@ export class DiscountScanner {
       const candles = await indodaxClient.fetchCandles(symbol, '1D');
       if (candles.length >= 50) {
         // Cek apakah mock
-        if ((candles as any).__isMock) {
+        const isMock = (candles as any).__isMock;
+        if (isMock) {
           console.warn(`[DiscountScanner] ${symbol}: API returned mock candles, using fallback`);
         } else {
           console.log(`[DiscountScanner] ${symbol}: using ${candles.length} real candles`);
@@ -281,10 +282,10 @@ export class DiscountScanner {
 
   private generateMockPriceHistory(currentPrice: number, symbol: string): number[] {
     const today = new Date().toISOString().split('T')[0];
-    const seed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + 
+    const seed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) +
                  today.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) * 997;
     const rand = seededRandom(seed);
-    
+
     const prices: number[] = [];
     let price = currentPrice * 0.85;
 

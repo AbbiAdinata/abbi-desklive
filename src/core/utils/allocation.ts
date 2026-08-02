@@ -1,5 +1,11 @@
 // ============================================================
-// ABBI DeskLive — Market-Cap Weighted Allocation Engine (V5)
+// ABBI DeskLive — Market-Cap Weighted Allocation Engine (V5.1)
+// FIXED: 
+//   1. Position limit murni dari portfolioValue (bukan dicampur cash)
+//   2. Guard division by zero (portfolioValue <= 0)
+//   3. Hard cap marketCapWeight — single coin tidak boleh melebihi target bobot
+//   4. Sort descending by marketCapWeight — BTC/ETH diprioritaskan
+//   5. Cooldown 6 jam — prevent re-entry berulang saat sinyal masih di atas threshold
 // ============================================================
 
 import {
@@ -23,12 +29,53 @@ export interface AllocationResult {
   reason: string;
 }
 
+interface BoostedItem {
+  symbol: string;
+  rawAllocation: number;
+  marketCapWeight: number;
+  signalScore: number;
+  signalBoost: number;
+  budgetTier: 'LOW' | 'HIGH';
+}
+
+// ─── Cooldown tracking (in-memory, reset saat restart) ─────
+const entryCooldownMap = new Map<string, number>();
+const COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 jam
+
+/**
+ * Cek apakah symbol masih dalam cooldown
+ */
+function isInCooldown(symbol: string): boolean {
+  const lastEntry = entryCooldownMap.get(symbol);
+  if (!lastEntry) return false;
+  return Date.now() - lastEntry < COOLDOWN_MS;
+}
+
+/**
+ * Set cooldown untuk symbol
+ */
+function setCooldown(symbol: string): void {
+  entryCooldownMap.set(symbol, Date.now());
+}
+
+/**
+ * Reset cooldown (untuk testing/debug)
+ */
+export function resetCooldown(symbol?: string): void {
+  if (symbol) {
+    entryCooldownMap.delete(symbol);
+  } else {
+    entryCooldownMap.clear();
+  }
+}
+
 /**
  * Hitung alokasi pembelian berdasarkan:
  *   1. Signal score → budget tier (300k vs 500k)
- *   2. Market cap weight
+ *   2. Market cap weight (hard cap — tidak boleh melebihi)
  *   3. Regime multiplier
  *   4. Position limit (max % of portfolio per coin)
+ *   5. Cooldown guard (6 jam)
  */
 export function calculateAllocations(
   signals: EntrySignal[],
@@ -38,6 +85,18 @@ export function calculateAllocations(
   dailyBudgetRemaining: number,
   cashAvailable: number
 ): AllocationResult[] {
+  // ─── Guard 1: Portfolio value harus positif ─────────────
+  if (portfolioValue <= 0) {
+    console.log('[Allocation] SKIP: portfolioValue <= 0, waiting for baseline');
+    return [];
+  }
+
+  // ─── Guard 2: Cash harus cukup untuk minimal 1 trade ─────
+  if (cashAvailable < MIN_TRADE) {
+    console.log(`[Allocation] SKIP: cashAvailable Rp${cashAvailable.toLocaleString('id-ID')} < MIN_TRADE`);
+    return [];
+  }
+
   const eligible = signals.filter((s) => {
     const threshold = getThreshold(s.symbol, regime);
     return s.score >= threshold;
@@ -48,9 +107,12 @@ export function calculateAllocations(
   const regimeMult = REGIME_MULTIPLIER[regime] || 1.0;
   if (regimeMult === 0) return [];
 
-  const boosted = eligible.map((signal) => {
+  // ─── Build boosted array dengan marketCapWeight ───────────
+  const boosted: BoostedItem[] = [];
+
+  for (const signal of eligible) {
     const coin = COIN_UNIVERSE.find((c) => c.symbol === signal.symbol);
-    if (!coin) return null;
+    if (!coin) continue;
 
     // Budget tier based on signal score
     const budgetTier: 'LOW' | 'HIGH' = signal.score >= 85 ? 'HIGH' : 'LOW';
@@ -61,40 +123,68 @@ export function calculateAllocations(
 
     const rawAllocation = baseBudget * coin.marketCapWeight * signalBoost * regimeMult;
 
-    return {
+    boosted.push({
       symbol: signal.symbol,
       rawAllocation,
       marketCapWeight: coin.marketCapWeight,
       signalScore: signal.score,
       signalBoost,
       budgetTier,
-    };
-  }).filter(Boolean) as NonNullable<typeof boosted[0]>[];
+    });
+  }
 
   if (boosted.length === 0) return [];
 
+  // ─── FIX 4: Sort descending by marketCapWeight ──────────
+  // BTC (0.40) diprioritaskan, then ETH (0.20), etc.
+  boosted.sort((a: BoostedItem, b: BoostedItem) => b.marketCapWeight - a.marketCapWeight);
+
   // Normalize
-  const totalRaw = boosted.reduce((sum, b) => sum + b.rawAllocation, 0);
+  const totalRaw = boosted.reduce((sum: number, b: BoostedItem) => sum + b.rawAllocation, 0);
   const scaleFactor = totalRaw > dailyBudgetRemaining ? dailyBudgetRemaining / totalRaw : 1;
 
   const results: AllocationResult[] = [];
 
   for (const item of boosted) {
+    // ─── FIX 5: Cooldown check ───────────────────────────
+    if (isInCooldown(item.symbol)) {
+      const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - (entryCooldownMap.get(item.symbol) || 0))) / 60000);
+      console.log(`[Allocation] Skip ${item.symbol}: in cooldown (${remaining} min remaining)`);
+      continue;
+    }
+
     let amount = Math.floor(item.rawAllocation * scaleFactor);
 
-    // Position limit check
+    // ─── FIX 1: Position limit — murni dari portfolioValue ─
+    // Bukan Math.max(portfolioValue, cashAvailable)
     const limitPct = POSITION_LIMITS[item.symbol] || 0.02;
-    const effectivePortfolioValue = Math.max(portfolioValue, cashAvailable);
-    const maxAllowedValue = effectivePortfolioValue * limitPct;
+    const maxAllowedValue = portfolioValue * limitPct;
     const currentValue = positionValues[item.symbol] || 0;
     const roomRemaining = maxAllowedValue - currentValue;
 
     if (roomRemaining <= 0) {
-      console.log(`[Allocation] Skip ${item.symbol}: at position limit (${(currentValue/portfolioValue*100).toFixed(1)}% / ${(limitPct*100).toFixed(0)}%)`);
+      // FIX: Guard division by zero — portfolioValue sudah dicek di atas
+      const currentPct = portfolioValue > 0 ? (currentValue / portfolioValue * 100).toFixed(1) : 'N/A';
+      const limitPctDisplay = (limitPct * 100).toFixed(0);
+      console.log(`[Allocation] Skip ${item.symbol}: at position limit (${currentPct}% / ${limitPctDisplay}%)`);
       continue;
     }
 
-    amount = Math.min(amount, Math.floor(roomRemaining), MAX_PER_TRADE, cashAvailable);
+    // ─── FIX 2: Hard cap marketCapWeight ──────────────────
+    // Single coin tidak boleh melebihi target bobot market cap-nya
+    // meski position limit teknis masih ada ruang
+    const targetWeightValue = portfolioValue * item.marketCapWeight;
+    const weightRoomRemaining = targetWeightValue - currentValue;
+
+    if (weightRoomRemaining <= 0) {
+      console.log(`[Allocation] Skip ${item.symbol}: at marketCapWeight limit (${(item.marketCapWeight * 100).toFixed(1)}% of portfolio)`);
+      continue;
+    }
+
+    // Gunakan yang lebih ketat: position limit vs market cap weight
+    const effectiveRoom = Math.min(roomRemaining, weightRoomRemaining);
+
+    amount = Math.min(amount, Math.floor(effectiveRoom), MAX_PER_TRADE, cashAvailable);
 
     if (amount < MIN_TRADE) {
       console.log(`[Allocation] Skip ${item.symbol}: Rp${amount.toLocaleString('id-ID')} < MIN_TRADE`);
@@ -111,11 +201,14 @@ export function calculateAllocations(
       reason: `${item.symbol}: MCAP ${(item.marketCapWeight * 100).toFixed(0)}% × Score ${item.signalScore} × ${item.budgetTier} × ${regime}`,
     });
 
+    // ─── FIX 5: Set cooldown setelah allocate ─────────────
+    setCooldown(item.symbol);
+
     // Deduct from available cash for next coin
     cashAvailable -= amount;
   }
 
-  const finalTotal = results.reduce((sum, r) => sum + r.amountIdr, 0);
+  const finalTotal = results.reduce((sum: number, r: AllocationResult) => sum + r.amountIdr, 0);
   console.log(
     `[Allocation] ${results.length} allocations, total Rp${finalTotal.toLocaleString('id-ID')}`
   );
@@ -124,26 +217,26 @@ export function calculateAllocations(
 
 export function getThreshold(symbol: string, regime: string): number {
   const thresholds: Record<string, Record<string, number>> = {
-    BTC: { bear: 50, bull: 75, sideways: 999 },
-    ETH: { bear: 45, bull: 70, sideways: 999 },
-    BNB: { bear: 45, bull: 70, sideways: 999 },
-    SOL: { bear: 45, bull: 70, sideways: 999 },
-    XRP: { bear: 40, bull: 65, sideways: 999 },
-    ADA: { bear: 40, bull: 65, sideways: 999 },
-    AVAX: { bear: 40, bull: 65, sideways: 999 },
-    LINK: { bear: 40, bull: 65, sideways: 999 },
-    DOT: { bear: 40, bull: 65, sideways: 999 },
-    MATIC: { bear: 40, bull: 65, sideways: 999 },
-    NEAR: { bear: 38, bull: 62, sideways: 999 },
-    ARB: { bear: 38, bull: 62, sideways: 999 },
-    OP: { bear: 38, bull: 62, sideways: 999 },
-    SEI: { bear: 38, bull: 62, sideways: 999 },
-    SUI: { bear: 38, bull: 62, sideways: 999 },
-    INJ: { bear: 35, bull: 60, sideways: 999 },
-    RENDER: { bear: 35, bull: 60, sideways: 999 },
-    TIA: { bear: 35, bull: 60, sideways: 999 },
-    PYTH: { bear: 35, bull: 60, sideways: 999 },
-    JUP: { bear: 35, bull: 60, sideways: 999 },
+    BTC: { bear: 50, bull: 75, sideways: 85 },
+    ETH: { bear: 45, bull: 70, sideways: 85 },
+    BNB: { bear: 45, bull: 70, sideways: 85 },
+    SOL: { bear: 45, bull: 70, sideways: 85 },
+    XRP: { bear: 40, bull: 65, sideways: 85 },
+    ADA: { bear: 40, bull: 65, sideways: 85 },
+    AVAX: { bear: 40, bull: 65, sideways: 85 },
+    LINK: { bear: 40, bull: 65, sideways: 85 },
+    DOT: { bear: 40, bull: 65, sideways: 85 },
+    MATIC: { bear: 40, bull: 65, sideways: 85 },
+    NEAR: { bear: 38, bull: 62, sideways: 85 },
+    ARB: { bear: 38, bull: 62, sideways: 85 },
+    OP: { bear: 38, bull: 62, sideways: 85 },
+    SEI: { bear: 38, bull: 62, sideways: 85 },
+    SUI: { bear: 38, bull: 62, sideways: 85 },
+    INJ: { bear: 35, bull: 60, sideways: 85 },
+    RENDER: { bear: 35, bull: 60, sideways: 85 },
+    TIA: { bear: 35, bull: 60, sideways: 85 },
+    PYTH: { bear: 35, bull: 60, sideways: 85 },
+    JUP: { bear: 35, bull: 60, sideways: 85 },
   };
   return thresholds[symbol]?.[regime] || 70;
 }
@@ -155,6 +248,6 @@ export function getRemainingBudget(
   const today = new Date().toDateString();
   const spentToday = todayTrades
     .filter((t) => new Date(t.timestamp).toDateString() === today)
-    .reduce((sum, t) => sum + t.total, 0);
+    .reduce((sum: number, t) => sum + t.total, 0);
   return Math.max(0, dailyBudget - spentToday);
 }
