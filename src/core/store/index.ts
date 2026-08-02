@@ -62,6 +62,7 @@ interface TradingState {
   updatePosition: (symbol: string, updates: Partial<Position>) => void;
   removePosition: (symbol: string) => void;
   addTrade: (trade: TradeHistory) => void;
+  setTradeHistory: (trades: TradeHistory[]) => void;
   setEntrySignals: (signals: EntrySignal[]) => void;
 }
 
@@ -88,6 +89,10 @@ export const useTradingStore = create<TradingState>()(
       addTrade: (trade) =>
         set((state) => ({
           tradeHistory: [trade, ...state.tradeHistory].slice(0, 500),
+        })),
+      setTradeHistory: (trades) =>
+        set(() => ({
+          tradeHistory: trades,
         })),
       setEntrySignals: (signals) =>
         set(() => ({
