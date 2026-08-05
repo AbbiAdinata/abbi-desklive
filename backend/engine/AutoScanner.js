@@ -1,30 +1,13 @@
-// ============================================================
-// ABBI DeskLive — Backend Auto Scanner (V5.1)
-// FIXED:
-//   1. Init CoinGecko cache saat start (jangan crash kalau cache kosong)
-//   2. Sync activePositions dengan backend state file
-//   3. Fix race condition: appendPrice setelah getPriceHistory selesai
-//   4. Threshold sideways = 85 (very strong only)
-// ============================================================
-
 const axios = require('axios');
-const fs = require('fs');
 const path = require('path');
-
-// ─── Import CoinGecko API ──────────────────────────────────
-let coinGeckoAPI;
-try {
-  coinGeckoAPI = require('./CoinGeckoAPI');
-} catch (err) {
-  console.error('[AutoScanner] Failed to load CoinGeckoAPI:', err.message);
-  process.exit(1);
-}
+const fs = require('fs');
+const coinGeckoAPI = require('./CoinGeckoAPI');
 
 const { getPriceHistory, appendPrice, initCacheFromCoinGecko, loadCache } = coinGeckoAPI;
 
 const SCAN_INTERVAL_MS = 15 * 60 * 1000;
 
-// ─── State persistence ───────────────────────────────────
+// ─── State persistence ─────────────────────────────────────
 const STATE_FILE = path.join(__dirname, '..', 'cache', 'scanner-state.json');
 
 function loadScannerState() {
@@ -35,12 +18,13 @@ function loadScannerState() {
         dailyInvested: data.dailyInvested || 0,
         lastResetDate: data.lastResetDate || new Date().toDateString(),
         activePositions: new Set(data.activePositions || []),
-        entryHistory: data.entryHistory || {}, // { symbol: timestamp }
+        entryHistory: data.entryHistory || {},
       };
     }
   } catch (e) {
     console.error('[AutoScanner] State load error:', e.message);
   }
+
   return {
     dailyInvested: 0,
     lastResetDate: new Date().toDateString(),
@@ -51,175 +35,152 @@ function loadScannerState() {
 
 function saveScannerState() {
   try {
-    const cacheDir = path.join(__dirname, '..', 'cache');
-    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-    
-    const data = {
-      dailyInvested,
-      lastResetDate,
-      activePositions: Array.from(activePositions),
-      entryHistory,
-    };
-    fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2));
+    fs.writeFileSync(STATE_FILE, JSON.stringify({
+      dailyInvested: state.dailyInvested,
+      lastResetDate: state.lastResetDate,
+      activePositions: [...state.activePositions],
+      entryHistory: state.entryHistory,
+    }, null, 2));
   } catch (e) {
     console.error('[AutoScanner] State save error:', e.message);
   }
 }
 
-// ─── Coin Config ───────────────────────────────────────────
-const COIN_CONFIG = [
-  { pair: 'btc_idr', symbol: 'BTC', weight: 0.40, volatil: false },
-  { pair: 'eth_idr', symbol: 'ETH', weight: 0.20, volatil: false },
-  { pair: 'sol_idr', symbol: 'SOL', weight: 0.10, volatil: true },
-  { pair: 'bnb_idr', symbol: 'BNB', weight: 0.10, volatil: false },
-  { pair: 'xrp_idr', symbol: 'XRP', weight: 0.05, volatil: true },
-  { pair: 'ada_idr', symbol: 'ADA', weight: 0.03, volatil: true },
-  { pair: 'avax_idr', symbol: 'AVAX', weight: 0.03, volatil: true },
-  { pair: 'link_idr', symbol: 'LINK', weight: 0.02, volatil: true },
-  { pair: 'dot_idr', symbol: 'DOT', weight: 0.02, volatil: true },
-  { pair: 'matic_idr', symbol: 'MATIC', weight: 0.02, volatil: true },
-  { pair: 'near_idr', symbol: 'NEAR', weight: 0.02, volatil: true },
-  { pair: 'arb_idr', symbol: 'ARB', weight: 0.015, volatil: true },
-  { pair: 'op_idr', symbol: 'OP', weight: 0.015, volatil: true },
-  { pair: 'sei_idr', symbol: 'SEI', weight: 0.015, volatil: true },
-  { pair: 'sui_idr', symbol: 'SUI', weight: 0.015, volatil: true },
-  { pair: 'inj_idr', symbol: 'INJ', weight: 0.01, volatil: true },
-  { pair: 'render_idr', symbol: 'RENDER', weight: 0.01, volatil: true },
-  { pair: 'tia_idr', symbol: 'TIA', weight: 0.01, volatil: true },
-  { pair: 'jup_idr', symbol: 'JUP', weight: 0.01, volatil: true },
-  { pair: 'pyth_idr', symbol: 'PYTH', weight: 0.01, volatil: true },
-];
+let state = loadScannerState();
 
-// ─── Thresholds (sideways = 85) ──────────────────────────
-const THRESHOLDS = {
-  btc_idr: { bear: 50, bull: 75, sideways: 85 },
-  eth_idr: { bear: 45, bull: 70, sideways: 85 },
-  sol_idr: { bear: 45, bull: 70, sideways: 85 },
-  bnb_idr: { bear: 45, bull: 70, sideways: 85 },
-  xrp_idr: { bear: 40, bull: 65, sideways: 85 },
-  ada_idr: { bear: 40, bull: 65, sideways: 85 },
-  avax_idr: { bear: 40, bull: 65, sideways: 85 },
-  link_idr: { bear: 40, bull: 65, sideways: 85 },
-  dot_idr: { bear: 40, bull: 65, sideways: 85 },
-  matic_idr: { bear: 40, bull: 65, sideways: 85 },
-  near_idr: { bear: 38, bull: 62, sideways: 85 },
-  arb_idr: { bear: 38, bull: 62, sideways: 85 },
-  op_idr: { bear: 38, bull: 62, sideways: 85 },
-  sei_idr: { bear: 38, bull: 62, sideways: 85 },
-  sui_idr: { bear: 38, bull: 62, sideways: 85 },
-  inj_idr: { bear: 35, bull: 60, sideways: 85 },
-  render_idr: { bear: 35, bull: 60, sideways: 85 },
-  tia_idr: { bear: 35, bull: 60, sideways: 85 },
-  jup_idr: { bear: 35, bull: 60, sideways: 85 },
-  pyth_idr: { bear: 35, bull: 60, sideways: 85 },
-};
-
+// ─── Config ──────────────────────────────────────────────
 const BUDGET_LOW = 300000;
 const BUDGET_HIGH = 500000;
 const MIN_TRADE = 50000;
-const COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 jam
 
-// ─── State ─────────────────────────────────────────────────
-let scanning = false;
-let state = loadScannerState();
-let dailyInvested = state.dailyInvested;
-let lastResetDate = state.lastResetDate;
-let activePositions = state.activePositions;
-let entryHistory = state.entryHistory; // { symbol: timestamp }
+const COIN_CONFIG = [
+  { pair: 'btc_idr', symbol: 'BTC', weight: 0.40, volatil: 'high' },
+  { pair: 'eth_idr', symbol: 'ETH', weight: 0.25, volatil: 'high' },
+  { pair: 'bnb_idr', symbol: 'BNB', weight: 0.15, volatil: 'medium' },
+  { pair: 'sol_idr', symbol: 'SOL', weight: 0.10, volatil: 'high' },
+  { pair: 'xrp_idr', symbol: 'XRP', weight: 0.05, volatil: 'medium' },
+  { pair: 'doge_idr', symbol: 'DOGE', weight: 0.03, volatil: 'high' },
+  { pair: 'ada_idr', symbol: 'ADA', weight: 0.03, volatil: 'medium' },
+  { pair: 'trx_idr', symbol: 'TRX', weight: 0.03, volatil: 'medium' },
+  { pair: 'avax_idr', symbol: 'AVAX', weight: 0.02, volatil: 'high' },
+  { pair: 'sui_idr', symbol: 'SUI', weight: 0.02, volatil: 'high' },
+  { pair: 'link_idr', symbol: 'LINK', weight: 0.02, volatil: 'medium' },
+  { pair: 'ton_idr', symbol: 'TON', weight: 0.02, volatil: 'medium' },
+  { pair: 'shib_idr', symbol: 'SHIB', weight: 0.01, volatil: 'high' },
+  { pair: 'dot_idr', symbol: 'DOT', weight: 0.01, volatil: 'medium' },
+  { pair: 'ltc_idr', symbol: 'LTC', weight: 0.01, volatil: 'medium' },
+  { pair: 'bch_idr', symbol: 'BCH', weight: 0.01, volatil: 'medium' },
+  { pair: 'uni_idr', symbol: 'UNI', weight: 0.01, volatil: 'medium' },
+  { pair: 'etc_idr', symbol: 'ETC', weight: 0.01, volatil: 'medium' },
+  { pair: 'fil_idr', symbol: 'FIL', weight: 0.01, volatil: 'medium' },
+  { pair: 'xlm_idr', symbol: 'XLM', weight: 0.01, volatil: 'medium' },
+];
 
-function log(msg) {
-  console.log(`[AutoScanner ${new Date().toISOString()}] ${msg}`);
-}
+const THRESHOLDS = {
+  btc_idr: { bull: 75, sideways: 50, bear: 35 },
+  eth_idr: { bull: 75, sideways: 50, bear: 35 },
+  bnb_idr: { bull: 75, sideways: 50, bear: 35 },
+  sol_idr: { bull: 75, sideways: 50, bear: 35 },
+  xrp_idr: { bull: 75, sideways: 50, bear: 35 },
+  doge_idr: { bull: 75, sideways: 50, bear: 35 },
+  ada_idr: { bull: 75, sideways: 50, bear: 35 },
+  trx_idr: { bull: 75, sideways: 50, bear: 35 },
+  avax_idr: { bull: 75, sideways: 50, bear: 35 },
+  sui_idr: { bull: 75, sideways: 50, bear: 35 },
+  link_idr: { bull: 75, sideways: 50, bear: 35 },
+  ton_idr: { bull: 75, sideways: 50, bear: 35 },
+  shib_idr: { bull: 75, sideways: 50, bear: 35 },
+  dot_idr: { bull: 75, sideways: 50, bear: 35 },
+  ltc_idr: { bull: 75, sideways: 50, bear: 35 },
+  bch_idr: { bull: 75, sideways: 50, bear: 35 },
+  uni_idr: { bull: 75, sideways: 50, bear: 35 },
+  etc_idr: { bull: 75, sideways: 50, bear: 35 },
+  fil_idr: { bull: 75, sideways: 50, bear: 35 },
+  xlm_idr: { bull: 75, sideways: 50, bear: 35 },
+};
 
-// ─── Fetch REAL ticker from Indodax ──────────────────────
-async function fetchTicker(pair) {
-  try {
-    const res = await axios.get(`https://indodax.com/api/ticker/${pair}`, { timeout: 10000 });
-    return res.data?.ticker || null;
-  } catch (err) {
-    log(`${pair}: fetchTicker failed — ${err.message}`);
-    return null;
-  }
-}
-
-// ─── Technical Indicators ─────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────
 function calcMA(prices, period) {
   if (prices.length < period) return prices[prices.length - 1] || 0;
-  return prices.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const slice = prices.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
 }
 
 function calcRSI(prices, period = 14) {
   if (prices.length < period + 1) return 50;
   let gains = 0, losses = 0;
   for (let i = prices.length - period; i < prices.length; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses += Math.abs(change);
+    const diff = prices[i] - prices[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
   }
   const avgGain = gains / period;
   const avgLoss = losses / period;
   if (avgLoss === 0) return 100;
-  return 100 - (100 / (1 + avgGain / avgLoss));
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
 }
 
 function calcBollinger(prices, period = 20) {
   const ma = calcMA(prices, period);
   const slice = prices.slice(-period);
-  const variance = slice.reduce((sum, p) => sum + Math.pow(p - ma, 2), 0) / period;
-  const sd = Math.sqrt(variance);
+  const sqDiffs = slice.map(p => Math.pow(p - ma, 2));
+  const sd = Math.sqrt(sqDiffs.reduce((a, b) => a + b, 0) / period);
   return { upper: ma + 2 * sd, middle: ma, lower: ma - 2 * sd };
 }
 
-function calcScore(price, ma20, ma50, ma200, rsi, bbLower, bbUpper, prices) {
-  let trendScore = 0;
-  if (price < ma200 && ma50 < ma200 * 1.02) trendScore = 28;
-  else if (price < ma20 && ma200 > ma200 * 0.98) trendScore = 20;
-  else if (price > ma20 && price > ma50 && price > ma200) trendScore = 5;
-  else trendScore = 12;
-
-  let valScore = 0;
-  if (rsi < 30) valScore = 38;
-  else if (rsi < 38) valScore = 32;
-  else if (rsi < 55) valScore = 20;
-  else if (rsi < 80) valScore = 8;
-  else valScore = 2;
-
-  const bbBonus = price <= bbLower * 1.02 ? 4 : 0;
-  valScore = Math.min(40, valScore + bbBonus);
-
-  const low20d = Math.min(...prices.slice(-20));
-  let supScore = 0;
-  if (price <= low20d * 1.02) supScore = 25;
-  else if (price <= low20d * 1.05) supScore = 15;
-
-  return Math.min(100, Math.round(trendScore + valScore + supScore));
+function detectRegime() {
+  const hour = new Date().getHours();
+  if (hour >= 2 && hour <= 6) return 'sideways';
+  if (hour >= 18 || hour <= 5) return 'bear';
+  return 'bull';
 }
 
-// ─── Detect Market Regime ──────────────────────────────────
-async function detectRegime() {
-  const ticker = await fetchTicker('btc_idr');
-  if (!ticker) return 'bear';
-
-  const last = parseFloat(ticker.last);
-  const high = parseFloat(ticker.high);
-  const low = parseFloat(ticker.low);
-
-  const prices = getPriceHistory('btc_idr', last, high, low);
-  const ma200 = calcMA(prices, 200);
-
-  if (last < ma200 * 0.98) return 'bear';
-  if (last > ma200 * 1.02) return 'bull';
-  return 'sideways';
+function log(msg) {
+  const ts = new Date().toISOString();
+  console.log(`[AutoScanner] ${ts} | ${msg}`);
 }
 
-// ─── Cooldown Check ──────────────────────────────────────
-function isInCooldown(symbol) {
-  const lastEntry = entryHistory[symbol];
-  if (!lastEntry) return false;
-  return Date.now() - lastEntry < COOLDOWN_MS;
+// ─── Core Logic ──────────────────────────────────────────
+async function fetchTicker(pair) {
+  try {
+    const res = await axios.get(`https://indodax.com/api/ticker/${pair}`, { timeout: 10000 });
+    return res.data?.ticker;
+  } catch (err) {
+    log(`Fetch ticker failed: ${pair} | ${err.message}`);
+    return null;
+  }
 }
 
-// ─── Core: Scan Single Coin ───────────────────────────────
+function calcScore(last, ma20, ma50, ma200, rsi, bbLower, bbUpper, prices) {
+  let score = 0;
+
+  // Trend (40%)
+  const ma20Rising = ma20 > calcMA(prices.slice(0, -1), 20);
+  const ma50Rising = ma50 > calcMA(prices.slice(0, -1), 50);
+  const ma200Rising = ma200 > ma50;
+  if (last > ma20) score += 10;
+  if (last > ma50) score += 10;
+  if (last > ma200) score += 10;
+  if (ma20Rising) score += 5;
+  if (ma50Rising) score += 5;
+
+  // Valuation (30%)
+  if (rsi < 30) score += 15;
+  else if (rsi < 40) score += 10;
+  else if (rsi < 50) score += 5;
+  if (last < bbLower) score += 15;
+
+  // Support (30%)
+  const recentLow = Math.min(...prices.slice(-20));
+  const distFromLow = (last - recentLow) / recentLow;
+  if (distFromLow < 0.02) score += 15;
+  else if (distFromLow < 0.05) score += 10;
+  if (last < ma20 && ma200 > ma50) score += 15;
+
+  return Math.min(score, 100);
+}
+
 async function scanCoin(config, regime) {
   const { pair, symbol, weight, volatil } = config;
 
@@ -233,10 +194,18 @@ async function scanCoin(config, regime) {
   const high = parseFloat(ticker.high);
   const low = parseFloat(ticker.low);
 
-  // ─── FIX: Get price history DULU, baru append ──────────
+  // Check max loss 25% for existing positions
+  if (state.activePositions.has(symbol) && state.entryHistory[symbol + '_price']) {
+    const entryPrice = state.entryHistory[symbol + '_price'];
+    const lossPct = (entryPrice - last) / entryPrice;
+    if (lossPct >= 0.25) {
+      log(`🚨 ${pair}: BLACKLISTED — down ${(lossPct*100).toFixed(1)}% from entry`);
+      state.activePositions.delete(symbol);
+      return null;
+    }
+  }
+
   const prices = getPriceHistory(pair, last, high, low);
-  
-  // Append harga terbaru ke cache untuk scan berikutnya
   appendPrice(pair, last);
 
   const ma20 = calcMA(prices, 20);
@@ -255,32 +224,29 @@ async function scanCoin(config, regime) {
     return null;
   }
 
-  // ─── Cooldown check ────────────────────────────────────
-  if (isInCooldown(symbol)) {
-    const remaining = Math.ceil((COOLDOWN_MS - (Date.now() - entryHistory[symbol])) / 60000);
-    log(`${pair}: Cooldown active (${remaining} min remaining) → SKIP`);
+  // Max 10 positions
+  if (state.activePositions.size >= 10) {
+    log(`${pair}: Max 10 positions reached → SKIP`);
     return null;
   }
 
-  if (activePositions.has(symbol)) {
-    log(`${pair}: Already have position → SKIP (1-entry rule)`);
-    return null;
-  }
-
-  const low20d = Math.min(...prices.slice(-20));
-  if (last > low20d * 1.02) {
-    log(`${pair}: Not at 20-day low → SKIP`);
-    return null;
+  // Re-entry: only if down 10% from last entry
+  if (state.activePositions.has(symbol)) {
+    const lastEntryPrice = state.entryHistory[symbol + '_price'] || Infinity;
+    if (last > lastEntryPrice * 0.9) {
+      log(`${pair}: Already have position, not down 10% → SKIP`);
+      return null;
+    }
+    log(`${pair}: Re-entry allowed (down >10%)`);
   }
 
   const today = new Date().toDateString();
-  if (today !== lastResetDate) {
-    dailyInvested = 0;
-    lastResetDate = today;
+  if (today !== state.lastResetDate) {
+    state.dailyInvested = 0;
+    state.lastResetDate = today;
     log('Daily budget reset');
   }
 
-  // Budget berdasarkan score + weight
   const baseBudget = score >= 85 ? BUDGET_HIGH : BUDGET_LOW;
   const budget = Math.floor(baseBudget * weight * 5);
 
@@ -289,8 +255,8 @@ async function scanCoin(config, regime) {
     return null;
   }
 
-  if (dailyInvested + budget > 6000000) {
-    log(`Daily budget exhausted: Rp${dailyInvested.toLocaleString('id-ID')}`);
+  if (state.dailyInvested + budget > (process.env.MAX_DAILY_INVESTMENT || 5000000)) {
+    log(`Daily budget exhausted: Rp${state.dailyInvested.toLocaleString('id-ID')}`);
     return null;
   }
 
@@ -319,9 +285,10 @@ async function executeBuy(signal) {
 
     if (res.data?.success) {
       log(`✅ BUY SUCCESS: ${signal.pair} | OrderID: ${res.data.orderId}`);
-      activePositions.add(signal.symbol);
-      entryHistory[signal.symbol] = Date.now();
-      dailyInvested += signal.budget;
+      state.activePositions.add(signal.symbol);
+      state.entryHistory[signal.symbol] = Date.now();
+      state.entryHistory[signal.symbol + '_price'] = signal.price;
+      state.dailyInvested += signal.budget;
       saveScannerState();
       return true;
     } else {
@@ -335,81 +302,61 @@ async function executeBuy(signal) {
 }
 
 // ─── Main Scan Loop ──────────────────────────────────────
+let scanning = false;
+let scanTimer = null;
+
 async function scanOnce() {
   if (scanning) {
     log('Scan sebelumnya masih jalan, skip.');
     return;
   }
   scanning = true;
-  log('══════════════════════════════════════════');
+  log('═══════════════════════════════════════════════════════');
   log('Scan mulai');
 
   try {
-    const regime = await detectRegime();
+    const regime = detectRegime();
     log(`Regime: ${regime.toUpperCase()}`);
 
-    // Prioritaskan coin volatil dulu
-    const sortedCoins = [...COIN_CONFIG].sort((a, b) => {
-      if (a.volatil && !b.volatil) return -1;
-      if (!a.volatil && b.volatil) return 1;
-      return b.weight - a.weight;
+    const sorted = [...COIN_CONFIG].sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2 };
+      return (order[a.volatil] || 3) - (order[b.volatil] || 3);
     });
 
-    const signals = [];
-    for (const coin of sortedCoins) {
-      await new Promise(r => setTimeout(r, 500));
-      const signal = await scanCoin(coin, regime);
-      if (signal) signals.push(signal);
+    let executed = 0;
+    for (const config of sorted) {
+      const signal = await scanCoin(config, regime);
+      if (signal) {
+        const ok = await executeBuy(signal);
+        if (ok) executed++;
+      }
     }
 
-    log(`Found ${signals.length} signals`);
-
-    signals.sort((a, b) => b.score - a.score);
-    for (const signal of signals) {
-      await executeBuy(signal);
-      await new Promise(r => setTimeout(r, 1000));
-    }
-
+    log(`Scan selesai. Executed: ${executed} trades.`);
   } catch (err) {
     log(`Scan error: ${err.message}`);
+  } finally {
+    scanning = false;
+    saveScannerState();
   }
-
-  scanning = false;
-  log(`Next scan in ${SCAN_INTERVAL_MS / 60000} menit`);
-  log('══════════════════════════════════════════');
 }
 
-// ─── Public API ──────────────────────────────────────────
-async function startAutoScanner() {
-  log('=== INITIALIZING AUTOSCANNER V5.1 ===');
-  
-  // ─── FIX: Init CoinGecko cache sebelum mulai ───────────
-  const cache = loadCache();
-  const cacheKeys = Object.keys(cache);
-  log(`Cache status: ${cacheKeys.length} coins cached`);
-  
-  if (cacheKeys.length < 5) {
-    log('Cache kosong atau kurang — menginisialisasi dari CoinGecko...');
-    log('⚠️ Ini akan memakan waktu ~5 menit (rate limit CoinGecko)');
-    await initCacheFromCoinGecko();
-    log('Cache initialization complete.');
-  }
-
-  log(`Aktif. Interval: ${SCAN_INTERVAL_MS / 60000} menit.`);
+function startAutoScanner() {
+  log('AutoScanner started (15 min interval)');
   scanOnce();
-  setInterval(scanOnce, SCAN_INTERVAL_MS);
+  scanTimer = setInterval(scanOnce, SCAN_INTERVAL_MS);
 }
 
-function stopAutoScanner() {}
-
-function getStatus() {
-  return {
-    scanning,
-    dailyInvested,
-    lastResetDate,
-    activePositions: Array.from(activePositions),
-    entryHistory,
-  };
+function stopAutoScanner() {
+  if (scanTimer) {
+    clearInterval(scanTimer);
+    scanTimer = null;
+    log('AutoScanner stopped');
+  }
 }
 
-module.exports = { startAutoScanner, scanOnce, getStatus };
+module.exports = { startAutoScanner, stopAutoScanner };
+
+if (require.main === module) {
+  startAutoScanner();
+}
