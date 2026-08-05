@@ -548,7 +548,7 @@ app.get('/api/indodax/depth/:pair', async (req, res) => {
   }
 });
 
-// startAutoScanner(); // DISABLED: will enable after P0 fixes
+startAutoScanner();
 
 app.listen(PORT, () => {
   console.log('============================================================');
