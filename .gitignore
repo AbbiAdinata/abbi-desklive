@@ -17,3 +17,6 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Backend secrets (NEVER commit)
+backend/.env
