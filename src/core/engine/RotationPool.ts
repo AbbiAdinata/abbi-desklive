@@ -54,13 +54,6 @@ export class RotationPoolEngine {
   checkAndNotify() {
     const rec = this.getRecommendation();
 
-    if (rec.action !== 'maintain') {
-      useNotificationStore.getState().addNotification({
-        type: 'warning',
-        title: 'Rotation Pool Alert',
-        message: rec.reason,
-      });
-    }
   }
 }
 

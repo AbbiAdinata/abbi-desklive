@@ -44,11 +44,6 @@ export class SmartAccumulator {
     this.isRunning = true;
 
     useSystemStore.getState().setRunning(true);
-    useNotificationStore.getState().addNotification({
-      type: 'info',
-      title: '🤖 ABBI Aktif 24/7',
-      message: 'Smart Accumulator mulai memantau pasar dan mengelola portofolio...',
-    });
 
     await this.scan();
     this.scanInterval = setInterval(() => this.scan(), SCAN_INTERVAL_MINUTES * 60 * 1000);
@@ -61,12 +56,6 @@ export class SmartAccumulator {
       clearInterval(this.scanInterval);
       this.scanInterval = null;
     }
-    useSystemStore.getState().setRunning(false);
-    useNotificationStore.getState().addNotification({
-      type: 'warning',
-      title: 'ABBI Dihentikan',
-      message: 'Bot berhenti. Posisi existing tetap dimonitor.',
-    });
   }
 
   // ============================================================
@@ -362,7 +351,7 @@ export class SmartAccumulator {
     useNotificationStore.getState().addNotification({
       type: 'success',
       title: `🛒 Auto-Entry: ${validSymbol}`,
-      message: `${quantity.toFixed(6)} @ Rp${validPrice.toLocaleString('id-ID')} = Rp${amountIdr.toLocaleString('id-ID')}`,
+      message: `Qty: ${quantity.toFixed(6)} | Price: Rp${validPrice.toLocaleString('id-ID')} | Total: Rp${amountIdr.toLocaleString('id-ID')} | Entry: ${new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})} WIB`,
     });
   }
 
@@ -403,14 +392,6 @@ export class SmartAccumulator {
       const currentWeight = totalValue > 0 ? (pos?.currentValue || 0) / totalValue : 0;
       return currentWeight < targetWeight * 0.6 && s.score >= 60;
     });
-
-    if (underweight.length > 0) {
-      useNotificationStore.getState().addNotification({
-        type: 'info',
-        title: '📊 Rebalance Opportunity',
-        message: `${underweight.length} coin underweight vs target allocation`,
-      });
-    }
   }
 
   // ============================================================
