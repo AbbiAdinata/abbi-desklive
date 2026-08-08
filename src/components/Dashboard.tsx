@@ -1,15 +1,11 @@
 // ============================================================
-// ABBI DeskLive — Dashboard (Lengkap + Auto Trade Toggle)
+// ABBI DeskLive — Dashboard (EA Screening)
 // ============================================================
 
 import { useEffect } from 'react';
 import { SmartAccumulatorPanel } from './SmartAccumulatorPanel';
-import { RotationPoolPanel } from './RotationPoolPanel';
-import { ScaleOutTracker } from './ScaleOutTracker';
-import { PortfolioSummary } from './PortfolioSummary';
 import { AIAnalysisPanel } from './AIAnalysisPanel';
-import { MarketOverview } from './MarketOverview';
-import { AutoTradeToggle } from './AutoTradeToggle';
+import { TopMoversPanel } from './TopMoversPanel';
 import { useSystemStore, useTradingStore } from '@core/store';
 import { smartAccumulator } from '@core/engine/SmartAccumulator';
 import { indodaxClient } from '@core/engine/IndodaxClient';
@@ -21,7 +17,7 @@ export function Dashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const tickers = await indodaxClient.fetchAllTickers();
+        await indodaxClient.fetchAllTickers();
         await smartAccumulator.scan();
       } catch (err) {
         console.error('Initial load error:', err);
@@ -42,28 +38,9 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Auto Trade Toggle — Paling Atas */}
-      <AutoTradeToggle />
-
-      {/* Top Row: Portfolio Summary */}
-      <PortfolioSummary />
-
-      {/* Middle Row: Main Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <SmartAccumulatorPanel />
-        </div>
-        <div className="space-y-6">
-          <ScaleOutTracker />
-          <RotationPoolPanel />
-        </div>
-      </div>
-
-      {/* Bottom Row: AI Analysis + Market Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AIAnalysisPanel />
-        <MarketOverview />
-      </div>
+      <SmartAccumulatorPanel />
+      <AIAnalysisPanel />
+      <TopMoversPanel />
     </div>
   );
 }

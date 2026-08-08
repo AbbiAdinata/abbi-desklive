@@ -97,7 +97,7 @@ export class IndodaxClient {
       const t = data.ticker;
       const lastPrice = parseFloat(t.last);
 
-      let change24h = parseFloat(t.percent_change_24h) || 0;
+      let change24h = parseFloat(t.percent_change_24h) || parseFloat(t.change_24h) || parseFloat(t.change24h) || parseFloat(t.change) || 0;
 
       if (change24h === 0) {
         const tracked = this.priceTracking.get(symbol);
@@ -125,7 +125,7 @@ export class IndodaxClient {
         price: lastPrice,
         priceIdr: lastPrice,
         change24h: change24h,
-        change7d: 0,
+        change7d: parseFloat(t.percent_change_7d) || parseFloat(t.change_7d) || parseFloat(t.change7d) || 0,
         volume24h: parseFloat(t.vol_idr) || 0,
         high24h: parseFloat(t.high) || 0,
         low24h: parseFloat(t.low) || 0,
@@ -164,7 +164,7 @@ export class IndodaxClient {
           price: parseFloat(t.last),
           priceIdr: parseFloat(t.last),
           change24h: parseFloat(t.percent_change_24h) || 0,
-          change7d: 0,
+          change7d: parseFloat(t.percent_change_7d) || parseFloat(t.change_7d) || parseFloat(t.change7d) || 0,
           volume24h: parseFloat(t.vol_idr) || 0,
           high24h: parseFloat(t.high) || 0,
           low24h: parseFloat(t.low) || 0,

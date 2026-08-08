@@ -134,8 +134,12 @@ export function calculateEntryScore(
   } else if (rsi < RSI_OVERBOUGHT) {
     valuationScore = 8;
   } else {
-    valuationScore = 2;
+    valuationScore = 0;  // FIX#4: RSI > 80 = 0 poin (tidak bisa entry)
   }
+
+  // FIX#4: Cap total score kalau RSI overbought
+  // RSI > 70 (premium/overbought) = max score 40 (tidak eligible entry)
+  // RSI > 80 (overbought) = max score 20 (strong sell territory)
 
   // Bonus jika Bollinger lower tersentuh
   const bbTouchBonus = price <= bbLower * 1.02 ? 4 : 0;
@@ -230,15 +234,21 @@ export function generateAIAnalysis(
 
   // Verdict
   let verdict: AIAnalysis['verdict'];
-  if (score.total >= ENTRY_SCORE_STRONG && rsi < RSI_DEEP_DISCOUNT) {
+  
+  // FIX#4: Guard clause — RSI overbought = selalu SELL/REDUCE
+  if (rsi >= RSI_OVERBOUGHT) {
+    verdict = 'STRONG_SELL';
+  } else if (rsi >= RSI_PREMIUM_MIN && score.total < ENTRY_SCORE_MIN) {
+    verdict = 'REDUCE';
+  } else if (score.total >= ENTRY_SCORE_STRONG && rsi < RSI_DEEP_DISCOUNT) {
     verdict = 'STRONG_BUY';
   } else if (score.total >= ENTRY_SCORE_MIN && rsi < RSI_DISCOUNT_MAX) {
     verdict = 'ACCUMULATE';
-  } else if (score.total >= 50) {
+  } else if (rsi < RSI_DEEP_DISCOUNT) {
+    verdict = 'ACCUMULATE';
+  } else if (score.total >= 50 && rsi < RSI_FAIR_MAX) {
     verdict = 'HOLD';
-  } else if (rsi > RSI_OVERBOUGHT) {
-    verdict = 'STRONG_SELL';
-  } else if (rsi > RSI_PREMIUM_MIN) {
+  } else if (rsi >= RSI_PREMIUM_MIN) {
     verdict = 'REDUCE';
   } else {
     verdict = 'HOLD';
