@@ -20,3 +20,5 @@ Thumbs.db
 
 # Backend secrets (NEVER commit)
 backend/.env
+.env
+backend/.env
