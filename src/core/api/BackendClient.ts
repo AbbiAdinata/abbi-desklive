@@ -9,6 +9,7 @@
 // ============================================================
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_AUTH_KEY = import.meta.env.VITE_API_AUTH_KEY || '';
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ export class BackendClient {
     try {
       const response = await fetchWithTimeout(
         `${this.baseUrl}/api/private/info`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-auth': API_AUTH_KEY } }
       );
 
       const data = await response.json();
@@ -137,7 +138,7 @@ export class BackendClient {
         `${this.baseUrl}/api/private/trade`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-api-auth': API_AUTH_KEY },
           body: JSON.stringify(body),
         }
       );
@@ -177,7 +178,7 @@ export class BackendClient {
         `${this.baseUrl}/api/private/openOrders`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-api-auth': API_AUTH_KEY },
           body: JSON.stringify(pair ? { pair } : {}),
         }
       );
@@ -196,7 +197,7 @@ export class BackendClient {
         `${this.baseUrl}/api/private/cancelOrder`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-api-auth': API_AUTH_KEY },
           body: JSON.stringify({ pair, order_id: orderId, type }),
         }
       );

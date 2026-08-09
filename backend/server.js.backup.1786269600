@@ -17,6 +17,18 @@ const crypto = require('crypto');
 const { startAutoScanner } = require('./engine/AutoScanner');
 
 const app = express();
+
+// ─── API AUTH MIDDLEWARE ───────────────────────────────────
+const API_AUTH_KEY = process.env.API_AUTH_KEY || "abbi-default-key-change-me";
+app.use("/api/private", (req, res, next) => {
+  // Bypass auth for localhost/same-server requests
+  if (req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1") return next();
+  const authHeader = req.headers["x-api-auth"];
+  if (!authHeader || authHeader !== API_AUTH_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
 const PORT = process.env.PORT || 3002;
 
 // ─── CORS ──────────────────────────────────────────────────
@@ -536,7 +548,7 @@ app.get('/api/indodax/depth/:pair', async (req, res) => {
   }
 });
 
-// startAutoScanner(); // DISABLED: will enable after P0 fixes
+startAutoScanner();
 
 app.listen(PORT, () => {
   console.log('============================================================');

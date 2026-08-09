@@ -24,6 +24,13 @@ if (!API_AUTH_KEY) {
   console.error('[FATAL] API_AUTH_KEY tidak di-set di .env');
   process.exit(1);
 }
+app.use("/api/private", (req, res, next) => {
+  const authHeader = req.headers["x-api-auth"];
+  if (!authHeader || authHeader !== API_AUTH_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
 const PORT = process.env.PORT || 3002;
 
 // ─── CORS ──────────────────────────────────────────────────
@@ -34,7 +41,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
-      return callback(null, true);
+      return callback(new Error('Origin header required'));
     }
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
