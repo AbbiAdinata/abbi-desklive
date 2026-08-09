@@ -11,8 +11,6 @@
 const WS_URL = 'wss://ws3.indodax.com/ws/';
 
 // ✅ FIX: Baca token dari env, fallback ke hardcoded hanya jika env kosong
-const STATIC_TOKEN_FALLBACK = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE5NDY2MTg0MTV9.UR1lBM6Eqh0yWz-PVirw1uPCxe60FdchR8eNVdsskeo';
-const WS_TOKEN = (import.meta.env.VITE_INDODAX_WS_TOKEN as string)?.trim() || STATIC_TOKEN_FALLBACK;
 
 export interface ChartTick {
   pair: string;
