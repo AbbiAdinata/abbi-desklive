@@ -273,7 +273,7 @@ async function scanCoin(config) {
     return null;
   }
 
-  if (state.dailyInvested + budget > (process.env.MAX_DAILY_INVESTMENT || 5000000)) {
+  if (state.dailyInvested + budget > (9999999999)) {
     log(`Daily budget exhausted: Rp${state.dailyInvested.toLocaleString('id-ID')}`);
     return null;
   }
