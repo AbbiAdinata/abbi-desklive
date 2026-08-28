@@ -77,26 +77,26 @@ const COIN_CONFIG = [
 ];
 
 const THRESHOLDS = {
-  btc_idr: { bull: 75, sideways: 65, bear: 50 },
-  eth_idr: { bull: 75, sideways: 65, bear: 50 },
-  bnb_idr: { bull: 75, sideways: 65, bear: 50 },
-  sol_idr: { bull: 75, sideways: 65, bear: 50 },
-  xrp_idr: { bull: 75, sideways: 65, bear: 50 },
-  doge_idr: { bull: 75, sideways: 65, bear: 50 },
-  ada_idr: { bull: 75, sideways: 65, bear: 50 },
-  trx_idr: { bull: 75, sideways: 65, bear: 50 },
-  avax_idr: { bull: 75, sideways: 65, bear: 50 },
-  sui_idr: { bull: 75, sideways: 65, bear: 50 },
-  link_idr: { bull: 75, sideways: 65, bear: 50 },
-  ton_idr: { bull: 75, sideways: 65, bear: 50 },
-  shib_idr: { bull: 75, sideways: 65, bear: 50 },
-  dot_idr: { bull: 75, sideways: 65, bear: 50 },
-  ltc_idr: { bull: 75, sideways: 65, bear: 50 },
-  bch_idr: { bull: 75, sideways: 65, bear: 50 },
-  uni_idr: { bull: 75, sideways: 65, bear: 50 },
-  etc_idr: { bull: 75, sideways: 65, bear: 50 },
-  fil_idr: { bull: 75, sideways: 65, bear: 50 },
-  xlm_idr: { bull: 75, sideways: 65, bear: 50 },
+  btc_idr: { bull: 75, sideways: 50, bear: 35 },
+  eth_idr: { bull: 75, sideways: 50, bear: 35 },
+  bnb_idr: { bull: 75, sideways: 50, bear: 35 },
+  sol_idr: { bull: 75, sideways: 50, bear: 35 },
+  xrp_idr: { bull: 75, sideways: 50, bear: 35 },
+  doge_idr: { bull: 75, sideways: 50, bear: 35 },
+  ada_idr: { bull: 75, sideways: 50, bear: 35 },
+  trx_idr: { bull: 75, sideways: 50, bear: 35 },
+  avax_idr: { bull: 75, sideways: 50, bear: 35 },
+  sui_idr: { bull: 75, sideways: 50, bear: 35 },
+  link_idr: { bull: 75, sideways: 50, bear: 35 },
+  ton_idr: { bull: 75, sideways: 50, bear: 35 },
+  shib_idr: { bull: 75, sideways: 50, bear: 35 },
+  dot_idr: { bull: 75, sideways: 50, bear: 35 },
+  ltc_idr: { bull: 75, sideways: 50, bear: 35 },
+  bch_idr: { bull: 75, sideways: 50, bear: 35 },
+  uni_idr: { bull: 75, sideways: 50, bear: 35 },
+  etc_idr: { bull: 75, sideways: 50, bear: 35 },
+  fil_idr: { bull: 75, sideways: 50, bear: 35 },
+  xlm_idr: { bull: 75, sideways: 50, bear: 35 },
 };
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -129,13 +129,11 @@ function calcBollinger(prices, period = 20) {
   return { upper: ma + 2 * sd, middle: ma, lower: ma - 2 * sd };
 }
 
-function detectRegime(ma20, ma50, ma200) {
-  // Bear: price below all MAs, MAs stacked bearish
-  if (ma200 > ma50 && ma50 > ma20) return 'bear';
-  // Bull: price above all MAs, MAs stacked bullish  
-  if (ma20 > ma50 && ma50 > ma200) return 'bull';
-  // Sideways: mixed or ranging
-  return 'sideways';
+function detectRegime() {
+  const hour = new Date().getHours();
+  if (hour >= 2 && hour <= 6) return 'sideways';
+  if (hour >= 18 || hour <= 5) return 'bear';
+  return 'bull';
 }
 
 function log(msg) {
@@ -198,7 +196,7 @@ function calcScore(last, ma20, ma50, ma200, rsi, bbLower, bbUpper, prices) {
   return Math.min(score, 100);
 }
 
-async function scanCoin(config) {
+async function scanCoin(config, regime) {
   const { pair, symbol, weight, volatil } = config;
 
   const ticker = await fetchTicker(pair);
@@ -231,7 +229,6 @@ async function scanCoin(config) {
   const rsi = calcRSI(prices);
   const bb = calcBollinger(prices);
 
-  const regime = detectRegime(ma20, ma50, ma200);
   const score = calcScore(last, ma20, ma50, ma200, rsi, bb.lower, bb.upper, prices);
   const threshold = THRESHOLDS[pair]?.[regime] || 70;
 
@@ -333,8 +330,8 @@ async function scanOnce() {
   log('Scan mulai');
 
   try {
-    // regime akan ditentukan per-coin di scanCoin berdasarkan MA trend
-    // Regime ditentukan per-coin di scanCoin berdasarkan MA trend
+    const regime = detectRegime();
+    log(`Regime: ${regime.toUpperCase()}`);
 
     const sorted = [...COIN_CONFIG].sort((a, b) => {
       const order = { high: 0, medium: 1, low: 2 };
@@ -343,7 +340,7 @@ async function scanOnce() {
 
     let executed = 0;
     for (const config of sorted) {
-      const signal = await scanCoin(config);
+      const signal = await scanCoin(config, regime);
       if (signal) {
         const ok = await executeBuy(signal);
         if (ok) executed++;

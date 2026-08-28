@@ -1,6 +1,6 @@
 {
-  "dailyInvested": 0,
-  "lastResetDate": "Fri Aug 28 2026",
+  "dailyInvested": 600000,
+  "lastResetDate": "Wed Aug 19 2026",
   "activePositions": [
     "XRP",
     "LINK",

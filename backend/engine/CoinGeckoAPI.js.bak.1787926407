@@ -166,7 +166,7 @@ function generateInterpolatedHistory(last, high, low, count = 250) {
 }
 
 module.exports = {
-  // initCacheFromCoinGecko, // DISABLED — cache now built from Indodax appendPrice
+  initCacheFromCoinGecko,
   appendPrice,
   getPriceHistory,
   COINGECKO_IDS,
