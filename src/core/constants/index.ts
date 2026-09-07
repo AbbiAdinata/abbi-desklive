@@ -167,7 +167,7 @@ export const AUTO_TRADE_ENABLED = true;
 // ============================================================
 // BACKWARD COMPATIBILITY
 // ============================================================
-export const ENTRY_SCORE_MIN = 75;
+export const ENTRY_SCORE_MIN = 55;
 export const ENTRY_SCORE_STRONG = 85;
 export const TP2_TRAILING = 0.08;
 export const RSI_DEEP_DISCOUNT = 30;

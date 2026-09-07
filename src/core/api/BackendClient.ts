@@ -223,3 +223,56 @@ export class BackendClient {
 
 // Singleton instance
 export const backendClient = new BackendClient();
+// ─── SCANNER API ───────────────────────────────────────────
+
+export interface ScannerSignal {
+  pair?: string;
+  symbol: string;
+  score: number;
+  price?: number;
+  budget?: number;
+  rsi?: number;
+  regime?: string;
+  threshold?: number;
+  reason?: string;
+  skipped?: boolean;
+  // Fields from /api/screening
+  trendPhase?: 'structural_discount' | 'healthy_pullback' | 'neutral' | 'overextended';
+  rsiStatus?: { value: number; timeframe: string; interpretation: string };
+  bollingerStatus?: string;
+  supportConfluence?: any[];
+  maAlignment?: string;
+  recommendation?: 'STRONG_BUY' | 'ACCUMULATE' | 'HOLD' | 'REDUCE' | 'STRONG_SELL';
+  confidence?: number;
+  timestamp?: string;
+}
+
+export interface ScannerStatus {
+  success: boolean;
+  isRunning: boolean;
+  lastScan: string | null;
+  dailyInvested: number;
+  activePositions: string[];
+  nextScan: string;
+}
+
+export async function fetchScannerSignals(): Promise<ScannerSignal[]> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/screening`);
+    const data = await response.json();
+    return data.signals || [];
+  } catch (err: any) {
+    console.error('[BackendClient] fetchScannerSignals error:', err);
+    return [];
+  }
+}
+
+export async function fetchScannerStatus(): Promise<ScannerStatus | null> {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/scanner/status`);
+    return await response.json();
+  } catch (err) {
+    console.error('[BackendClient] fetchScannerStatus error:', err);
+    return null;
+  }
+}

@@ -6,9 +6,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Brain, RefreshCw, Target, TrendingUp, Info } from 'lucide-react';
 import { useTradingStore, useSystemStore } from '@core/store';
-import { smartAccumulator } from '@core/engine/SmartAccumulator';
-import { discountScanner } from '@core/engine/DiscountScanner';
 import { ENTRY_SCORE_MIN, AI_VERDICT_COLORS } from '@core/constants';
+import { fetchScannerSignals } from "@core/api/BackendClient";
 import type { EntrySignal } from '@core/types';
 
 export function SmartAccumulatorPanel() {
@@ -18,10 +17,22 @@ export function SmartAccumulatorPanel() {
   const [selectedSignal, setSelectedSignal] = useState<EntrySignal | null>(null);
   const [showExplainer, setShowExplainer] = useState(false);
 
-  const generateSignals = useCallback(async () => {
-    const signals = await discountScanner.scanAll();
-    return signals.sort((a, b) => b.score - a.score);
-  }, []);
+const generateSignals = useCallback(async () => {
+  const rawSignals = await fetchScannerSignals();
+  const signals: EntrySignal[] = rawSignals.map((s) => ({
+    symbol: s.symbol,
+    score: s.score || 0,
+    trendPhase: s.trendPhase || 'neutral',
+    rsiStatus: s.rsiStatus || { value: s.rsi || 50, timeframe: '4H', interpretation: 'fair' },
+    bollingerStatus: s.bollingerStatus || 'between',
+    supportConfluence: s.supportConfluence || [],
+    maAlignment: s.maAlignment || 'mixed',
+    recommendation: s.recommendation || 'HOLD',
+    confidence: s.confidence || Math.min(s.score || 0, 100),
+    timestamp: s.timestamp || new Date().toISOString(),
+  }));
+  return signals.sort((a, b) => (b.score || 0) - (a.score || 0));
+}, []);
 
   useEffect(() => {
     const load = async () => {

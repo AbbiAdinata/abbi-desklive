@@ -14,7 +14,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
-const { startAutoScanner } = require('./engine/AutoScanner');
+const { startAutoScanner, getScreeningData } = require('./engine/AutoScanner');
 
 const app = express();
 
@@ -546,9 +546,79 @@ app.get('/api/indodax/depth/:pair', async (req, res) => {
   }
 });
 
+
+// ═══════════════════════════════════════════════════════════
+// SCANNER API (Frontend fetch hasil scan)
+// ═══════════════════════════════════════════════════════════
+
+app.get('/api/scanner/signals', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const signalsFile = path.join(__dirname, 'cache', 'signals-cache.json');
+    if (fs.existsSync(signalsFile)) {
+      const data = JSON.parse(fs.readFileSync(signalsFile, 'utf8'));
+      return res.json({ success: true, ...data });
+    }
+    res.json({ success: false, signals: [], timestamp: null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/scanner/status', (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const stateFile = path.join(__dirname, 'cache', 'scanner-state.json');
+    let state = {};
+    if (fs.existsSync(stateFile)) {
+      state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    }
+    res.json({
+      success: true,
+      isRunning: true,
+      lastScan: state.lastResetDate || null,
+      dailyInvested: state.dailyInvested || 0,
+      activePositions: state.activePositions || [],
+      nextScan: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 startAutoScanner();
 
-app.listen(PORT, () => {
+
+// ─── Screening Endpoint ───────────────────────────────────
+app.get('/api/screening', (req, res) => {
+  try {
+    const data = getScreeningData();
+    res.json({
+      success: true,
+      regime: data.regime,
+      signals: data.signals.map(s => ({
+        symbol: s.symbol,
+        score: s.score,
+        trendPhase: s.trendPhase,
+        rsiStatus: s.rsiStatus,
+        bollingerStatus: s.bollingerStatus,
+        supportConfluence: s.supportConfluence || [],
+        maAlignment: s.maAlignment,
+        recommendation: s.recommendation,
+        confidence: s.confidence,
+        timestamp: s.timestamp,
+      })),
+      timestamp: data.timestamp,
+    });
+  } catch (err) {
+    console.error('[Screening API] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log('============================================================');
   console.log('  ABBI DeskLive — Secure Backend Proxy FINAL');
   console.log('============================================================');
