@@ -193,7 +193,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-abbi-400" />
               {/* FIX: Pakai API_MODE langsung, bukan status.mode */}
-              <span className="text-sm text-slate-400">Mode: <span className={`font-medium ${API_MODE === 'live' ? 'text-emerald-400' : 'text-abbi-400'}`}>{API_MODE.toUpperCase()}</span></span>
+              <span className="text-sm text-slate-400">Mode: <span className="font-medium text-emerald-400">LIVE</span></span>
             </div>
           </div>
 

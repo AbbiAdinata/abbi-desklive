@@ -22,7 +22,7 @@ interface BalanceItem {
 }
 
 export function PortfolioView() {
-  const { positions, tradeHistory } = useTradingStore();
+  const { positions, tradeHistory, setTradeHistory } = useTradingStore();
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
   const [balances, setBalances] = useState<BalanceItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +30,100 @@ export function PortfolioView() {
   const [isRealData, setIsRealData] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [backendStatus, setBackendStatus] = useState<'unknown' | 'up' | 'down'>('unknown');
+  const [pnlData, setPnlData] = useState<Record<string, { avgBuyPrice: number; totalQty: number; pnlPercent: number; pnlIdr: number }>>({});
+  const [tradesForPnL, setTradesForPnL] = useState<any[]>([]);
+
+  const fetchTradeHistory = async () => {
+    try {
+      console.log('[PortfolioView] Fetching trade history from Indodax...');
+      const allTrades: any[] = [];
+      
+      // Fetch untuk semua coin di COIN_UNIVERSE
+      for (const coin of COIN_UNIVERSE) {
+        try {
+          const trades = await backendClient.getMyTrades(coin.symbol, 100);
+          if (trades.length > 0) {
+            console.log(`[PortfolioView] ${coin.symbol}: ${trades.length} trades`);
+            
+            // Transform ke format TradeHistory
+            const transformed = trades.map((t: any) => ({
+              id: t.id?.toString() || `${coin.symbol}-${t.time}`,
+              symbol: coin.symbol,
+              type: t.isBuyer ? 'BUY' : 'SELL_TP1' as const,
+              price: parseFloat(t.price),
+              quantity: parseFloat(t.qty),
+              total: parseFloat(t.quoteQty),
+              timestamp: new Date(t.time).toISOString(),
+              note: t.isBuyer ? 'Buy from ABBI DeskLive' : 'Sell from ABBI DeskLive',
+            }));
+            
+            allTrades.push(...transformed);
+          }
+        } catch (err) {
+          console.error(`[PortfolioView] Failed to fetch ${coin.symbol}:`, err);
+        }
+      }
+      
+      // Sort by timestamp desc
+      allTrades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      console.log(`[PortfolioView] Total trades fetched: ${allTrades.length}`);
+      setTradeHistory(allTrades);
+      setTradesForPnL(allTrades);
+    } catch (err) {
+      console.error('[PortfolioView] Failed to fetch trade history:', err);
+    }
+  };
+
+  const calculatePnL = (trades: any[]) => {
+    // Group trades by symbol
+    const bySymbol: Record<string, any[]> = {};
+    trades.forEach(t => {
+      if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+      bySymbol[t.symbol].push(t);
+    });
+    
+    // Calculate average buy price and P/L
+    const pnlData: Record<string, { avgBuyPrice: number; totalQty: number; pnlPercent: number; pnlIdr: number }> = {};
+    
+    Object.entries(bySymbol).forEach(([symbol, symbolTrades]) => {
+      const buyTrades = symbolTrades.filter((t: any) => t.type === 'BUY');
+      const sellTrades = symbolTrades.filter((t: any) => t.type !== 'BUY');
+      
+      if (buyTrades.length === 0) return;
+      
+      // Average buy price
+      const totalBuyIdr = buyTrades.reduce((sum: number, t: any) => sum + t.total, 0);
+      const totalBuyQty = buyTrades.reduce((sum: number, t: any) => sum + t.quantity, 0);
+      const avgBuyPrice = totalBuyQty > 0 ? totalBuyIdr / totalBuyQty : 0;
+      
+      // Current holdings (buy - sell)
+      const totalSellQty = sellTrades.reduce((sum: number, t: any) => sum + t.quantity, 0);
+      const currentQty = totalBuyQty - totalSellQty;
+      
+      // Get current price from balances (already loaded)
+      const balanceItem = balances.find(b => b.symbol === symbol);
+      const currentPrice = balanceItem?.price || 0;
+      
+      if (currentPrice > 0 && currentQty > 0) {
+        const currentValue = currentQty * currentPrice;
+        const costBasis = currentQty * avgBuyPrice;
+        const pnlIdr = currentValue - costBasis;
+        const pnlPercent = costBasis > 0 ? (pnlIdr / costBasis) * 100 : 0;
+        
+        pnlData[symbol] = {
+          avgBuyPrice,
+          totalQty: currentQty,
+          pnlPercent,
+          pnlIdr,
+        };
+      }
+    });
+    
+    console.log('[PortfolioView] P/L calculated:', pnlData);
+    setPnlData(pnlData);
+    return pnlData;
+  };
 
   const fetchPortfolio = async () => {
     setLoading(true);
@@ -128,9 +222,21 @@ export function PortfolioView() {
 
   useEffect(() => {
     fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 30000);
+    fetchTradeHistory();
+    const interval = setInterval(() => {
+      fetchPortfolio();
+      fetchTradeHistory();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Recalculate P/L when balances or trades change
+  useEffect(() => {
+    if (tradesForPnL.length > 0 && balances.length > 0) {
+      console.log('[PortfolioView] Recalculating P/L with balances:', balances.length);
+      calculatePnL(tradesForPnL);
+    }
+  }, [tradesForPnL, balances]);
 
   const filteredTrades = tradeHistory.filter((t) => {
     if (filter === 'buy') return t.type === 'BUY';
@@ -156,7 +262,7 @@ export function PortfolioView() {
             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
             : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
         }`}>
-          {isRealData ? 'LIVE — Real Data' : 'SIMULASI — Mock Data'}
+          LIVE — Real Data
         </span>
         {/* ✅ FIX: Show backend status */}
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
@@ -235,7 +341,7 @@ export function PortfolioView() {
             <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>Belum ada posisi aktif</p>
             {!isRealData && !error && (
-              <p className="text-xs text-slate-600 mt-1">Mode simulasi aktif — data bukan dari akun Indodax</p>
+              <p className="text-xs text-slate-600 mt-1">Data dari akun Indodax Anda</p>
             )}
             {isRealData && (
               <p className="text-xs text-slate-600 mt-1">Akun Indodax tidak memiliki aset crypto</p>
@@ -248,8 +354,11 @@ export function PortfolioView() {
                 <tr className="border-b border-slate-700/50">
                   <th className="text-left text-xs text-slate-400 py-2">Coin</th>
                   <th className="text-right text-xs text-slate-400 py-2">Balance</th>
-                  <th className="text-right text-xs text-slate-400 py-2">Price (IDR)</th>
+                  <th className="text-right text-xs text-slate-400 py-2">Entry Price</th>
+                  <th className="text-right text-xs text-slate-400 py-2">Current Price</th>
                   <th className="text-right text-xs text-slate-400 py-2">Value (IDR)</th>
+                  <th className="text-right text-xs text-slate-400 py-2">P/L (IDR)</th>
+                  <th className="text-right text-xs text-slate-400 py-2">P/L %</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,7 +370,14 @@ export function PortfolioView() {
                     </td>
                     <td className="py-3 text-right text-slate-300">{item.balance.toFixed(6)}</td>
                     <td className="py-3 text-right text-slate-300">{formatIdr(item.price)}</td>
-                    <td className="py-3 text-right font-medium text-emerald-400">{formatIdr(item.value)}</td>
+                  <td className="py-3 text-right text-slate-300">{formatIdr(item.price)}</td>
+                  <td className="py-3 text-right text-slate-300">{formatIdr(item.value)}</td>
+                  <td className={`py-3 text-right font-medium ${pnlData[item.symbol]?.pnlIdr !== undefined ? getPnlColor(pnlData[item.symbol].pnlPercent) : 'text-slate-500'}`}>
+                    {pnlData[item.symbol]?.pnlIdr !== undefined ? formatIdr(pnlData[item.symbol].pnlIdr) : '-'}
+                  </td>
+                  <td className={`py-3 text-right font-medium ${pnlData[item.symbol]?.pnlPercent !== undefined ? getPnlColor(pnlData[item.symbol].pnlPercent) : 'text-slate-500'}`}>
+                    {pnlData[item.symbol]?.pnlPercent !== undefined ? formatPercent(pnlData[item.symbol].pnlPercent) : '-'}
+                  </td>
                   </tr>
                 ))}
               </tbody>

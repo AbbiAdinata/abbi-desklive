@@ -72,7 +72,7 @@ export class SmartAccumulator {
       this.checkDailyReset();
 
       const regime = await regimeEngine.detect();
-      useSystemStore.getState().setMode(regime === 'bull' ? 'live' : 'mock');
+      // Mode always LIVE — no auto-switch
 
       const signals = await discountScanner.scanAll(regime);
       useTradingStore.getState().setEntrySignals(signals);

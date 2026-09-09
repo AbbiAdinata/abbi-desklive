@@ -102,28 +102,8 @@ export function SettingsView() {
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Mode</label>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setMode('mock')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  status.mode === 'mock'
-                    ? 'bg-abbi-500/20 text-abbi-400 border border-abbi-500/30'
-                    : 'bg-slate-700/30 text-slate-400 border border-slate-700/30'
-                }`}
-              >
-                Mock (Simulasi)
-              </button>
-              <button
-                onClick={() => setMode('live')}
-                disabled={!hasApiKey}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  status.mode === 'live'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-slate-700/30 text-slate-400 border border-slate-700/30'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                Live (Real API)
-              </button>
+            <div className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-block">
+              LIVE — Real Trading
             </div>
           </div>
         </div>

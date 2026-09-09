@@ -158,7 +158,7 @@ export const AI_VERDICT_COLORS = {
 // ENVIRONMENT
 // ============================================================
 const envMode = import.meta.env.VITE_API_MODE;
-export const API_MODE: 'mock' | 'live' = (envMode === 'live' || envMode === 'mock') ? envMode : 'mock';
+export const API_MODE: 'mock' | 'live' = 'live';
 
 export const MAX_DAILY_INVESTMENT = 5_000_000;
 

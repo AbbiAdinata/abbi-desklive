@@ -219,6 +219,38 @@ export class BackendClient {
       return { status: 'down', apiKeyConfigured: false };
     }
   }
+
+  async getMyTrades(symbol: string, limit: number = 50): Promise<any[]> {
+    try {
+      // Indodax V2: limit must be between 10 and 1000
+      const validLimit = Math.max(10, Math.min(1000, limit));
+      
+      // Indodax V2: time range cannot exceed 7 days
+      const endTime = Date.now();
+      const startTime = endTime - (7 * 24 * 60 * 60 * 1000); // 7 days ago
+      
+      const response = await fetch(
+        `${this.baseUrl}/api/private/myTrades?symbol=${symbol.toLowerCase()}_idr&limit=${validLimit}&startTime=${startTime}&endTime=${endTime}&sort=desc`
+      );
+      const data = await response.json();
+      
+      // Handle error response from Indodax
+      if (data && data.error) {
+        console.error(`[BackendClient] Indodax error for ${symbol}:`, data.error);
+        return [];
+      }
+      
+      // Handle format {"data": [...]}
+      if (data && Array.isArray(data.data)) {
+        return data.data;
+      }
+      
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error(`[BackendClient] Failed to fetch trades for ${symbol}:`, error);
+      return [];
+    }
+  }
 }
 
 // Singleton instance
