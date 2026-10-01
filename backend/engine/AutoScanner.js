@@ -422,6 +422,12 @@ async function scanCoin(config, regime) {
     return null;
   }
 
+  // RSI filter: jangan entry kalau overbought
+  if (rsi >= 50) {
+    log(`${pair}: RSI ${rsi.toFixed(1)} ≥ 50 → SKIP (overbought)`);
+    return null;
+  }
+
   // Max 10 positions
   if (state.activePositions.size >= 10) {
     log(`${pair}: Max 10 positions reached → SKIP`);
