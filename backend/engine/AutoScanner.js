@@ -501,6 +501,34 @@ async function executeBuy(signal) {
 }
 
 // ─── Check Take Profit ─────────────────────────────────
+
+// ─── Auto-Cleanup: Remove positions with zero balance ─────────
+async function cleanupEmptyPositions() {
+  const positions = Array.from(state.activePositions);
+  let cleaned = 0;
+
+  for (const symbol of positions) {
+    try {
+      const balanceRes = await axios.post(`http://localhost:3002/api/private/info`, {}, { timeout: 5000 });
+      const balance = parseFloat(balanceRes.data?.coins?.[symbol.toLowerCase()] || 0);
+
+      if (balance <= 0) {
+        log(`🧹 CLEANUP: ${symbol} has zero balance, removing from activePositions`);
+        state.activePositions.delete(symbol);
+        delete state.entryHistory[symbol];
+        cleaned++;
+      }
+    } catch (err) {
+      log(`⚠️ CLEANUP ERROR: ${symbol} | ${err.message}`);
+    }
+  }
+
+  if (cleaned > 0) {
+    log(`✅ CLEANUP: Removed ${cleaned} empty position(s) from activePositions`);
+    saveScannerState();
+  }
+}
+
 async function checkTakeProfit() {
   const positions = Array.from(state.activePositions);
 
@@ -612,6 +640,7 @@ async function scanOnce() {
     });
 
     // Check take profit first
+    await cleanupEmptyPositions();
     await checkTakeProfit();
     
     let executed = 0;
