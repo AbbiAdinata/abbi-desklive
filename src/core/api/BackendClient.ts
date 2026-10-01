@@ -251,6 +251,22 @@ export class BackendClient {
       return [];
     }
   }
+
+  async getPositions(): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/positions`);
+      const data = await response.json();
+      
+      if (data && data.success) {
+        return data;
+      }
+      
+      return { positions: [], totalPositions: 0 };
+    } catch (error) {
+      console.error('[BackendClient] Failed to fetch positions:', error);
+      return { positions: [], totalPositions: 0 };
+    }
+  }
 }
 
 // Singleton instance

@@ -124,7 +124,11 @@ function getDailyRegime(pair = 'btc_idr') {
   let regime = 'sideways';
   let confidence = 50;
   
-  if (prices.length >= 50) {
+  if (prices.length < 50) {
+    // Data < 50 hari: jangan percaya bull/bear, pakai sideways
+    regime = 'sideways';
+    confidence = 40;
+  } else if (prices.length >= 50) {
     ma50 = calcMA(prices, 50);
     
     if (prices.length >= 200) {
@@ -482,6 +486,7 @@ async function executeBuy(signal) {
       state.activePositions.add(signal.symbol);
       state.entryHistory[signal.symbol] = Date.now();
       state.entryHistory[signal.symbol + '_price'] = signal.price;
+      state.entryHistory[signal.symbol + '_partial'] = false;  // Reset partial flag
       state.dailyInvested += signal.budget;
       saveScannerState();
       return true;
@@ -494,6 +499,78 @@ async function executeBuy(signal) {
     return false;
   }
 }
+
+// ─── Check Take Profit ─────────────────────────────────
+async function checkTakeProfit() {
+  const positions = Array.from(state.activePositions);
+
+  for (const symbol of positions) {
+    const pair = symbol.toLowerCase() + '_idr';
+    const entryPrice = state.entryHistory[symbol + '_price'];
+
+    if (!entryPrice) continue;
+
+    try {
+      // Get current price
+      const tickerRes = await axios.get(`http://localhost:3002/api/indodax/ticker/${pair}`, { timeout: 5000 });
+      const currentPrice = parseFloat(tickerRes.data?.ticker?.last);
+
+      if (!currentPrice || isNaN(currentPrice)) continue;
+
+      const profitPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+
+      // Check if TP hit (≥15%) — sell 100%
+      if (profitPercent >= 15) {
+        log(`🎯 TP HIT: ${pair} | Entry: Rp${entryPrice.toLocaleString('id-ID')} | Current: Rp${currentPrice.toLocaleString('id-ID')} | Profit: ${profitPercent.toFixed(2)}%`);
+
+        // Check if already sold (prevent double sell)
+        const tpKey = symbol + '_tp_done';
+        if (state.entryHistory[tpKey]) {
+          log(`   ${pair}: TP already executed, skipping`);
+          continue;
+        }
+
+        // Get balance to sell 100%
+        const balanceRes = await axios.post(`http://localhost:3002/api/private/info`, {}, { timeout: 5000 });
+        const balance = parseFloat(balanceRes.data?.coins?.[symbol.toLowerCase()] || 0);
+
+        if (balance <= 0) {
+          log(`   ${pair}: No balance to sell`);
+          continue;
+        }
+
+        // Sell 100%
+        const sellValueIdr = balance * currentPrice;
+        log(`   Selling 100%: ${balance.toFixed(6)} ${symbol} ≈ Rp${sellValueIdr.toLocaleString('id-ID')}`);
+
+        const sellRes = await axios.post('http://localhost:3002/api/private/trade', {
+          pair: pair,
+          type: 'sell',
+          price: currentPrice,
+          amount: balance,
+        }, { timeout: 30000 });
+
+        if (sellRes.data?.success) {
+          log(`✅ TP SELL SUCCESS: ${pair} | OrderID: ${sellRes.data.orderId}`);
+          state.entryHistory[tpKey] = Date.now();
+
+          // Remove from activePositions — fully exited
+          state.activePositions.delete(symbol);
+          delete state.entryHistory[symbol];
+          log(`✅ FULLY EXITED: ${pair} | Auto-removed from activePositions`);
+
+          saveScannerState();
+        } else {
+          log(`❌ TP SELL FAILED: ${pair} | ${sellRes.data?.error || 'Unknown'}`);
+        }
+      }
+    } catch (err) {
+      log(`❌ TP CHECK ERROR: ${pair} | ${err.message}`);
+    }
+  }
+}
+
+
 
 // ─── Main Scan Loop ──────────────────────────────────────
 let scanning = false;
@@ -534,6 +611,9 @@ async function scanOnce() {
       return (order[a.volatil] || 3) - (order[b.volatil] || 3);
     });
 
+    // Check take profit first
+    await checkTakeProfit();
+    
     let executed = 0;
     for (const config of sorted) {
       const signal = await scanCoin(config, regime);
@@ -598,7 +678,7 @@ function startAutoScanner() {
   
   fetchBTCHistory().then(() => {
     scanOnce();
-    scannerTimer = setInterval(scanOnce, SCAN_INTERVAL_MS);
+    scanTimer = setInterval(scanOnce, SCAN_INTERVAL_MS);
   });
 }
 
@@ -610,7 +690,47 @@ function stopAutoScanner() {
   }
 }
 
-module.exports = { startAutoScanner, stopAutoScanner, getScreeningData };
+// ─── Get Positions Data (for Frontend) ─────────────────
+function getPositionsData() {
+  const positions = [];
+  
+  for (const symbol of state.activePositions) {
+    const entryPrice = state.entryHistory[symbol + '_price'];
+    const isPartial = state.entryHistory[symbol + '_partial'] || false;
+    const tp1Done = !!state.entryHistory[symbol + '_tp1_done'];
+    const tp2Done = !!state.entryHistory[symbol + '_tp2_done'];
+    
+    if (!entryPrice) continue;
+    
+    // Determine TP status
+    let tpStatus = 'Holding';
+    if (tp2Done) {
+      tpStatus = 'TP2_DONE';
+    } else if (tp1Done && isPartial) {
+      tpStatus = 'TP1_PARTIAL';
+    } else if (tp1Done) {
+      tpStatus = 'TP1_DONE';
+    }
+    
+    positions.push({
+      symbol,
+      entryPrice,
+      isPartial,
+      tp1Done,
+      tp2Done,
+      tpStatus,
+      entryTime: state.entryHistory[symbol] || null,
+    });
+  }
+  
+  return {
+    positions,
+    totalPositions: positions.length,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+module.exports = { startAutoScanner, stopAutoScanner, getScreeningData, getPositionsData };
 
 if (require.main === module) {
   startAutoScanner();

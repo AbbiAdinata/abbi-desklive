@@ -114,14 +114,8 @@ export function PortfolioView() {
         }
       }
 
-    console.log('[PortfolioView] P/L from backend:', newPnlData);
-    } catch (err) {
-      console.error('[PortfolioView] Failed to fetch positions from backend:', err);
-      setPnlData({});
-    }
-  };
-
-  const fetchPortfolio = async () => {
+      console.log('[PortfolioView] P/L from backend:', newPnlData);
+      setPnlData(newPnlData);
     setLoading(true);
     setError(null);
     
@@ -214,7 +208,7 @@ export function PortfolioView() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     fetchPortfolio();
@@ -226,13 +220,10 @@ export function PortfolioView() {
     return () => clearInterval(interval);
   }, []);
 
-  // Recalculate P/L when balances or trades change
+  // Fetch P/L from backend when component mounts
   useEffect(() => {
-    if (tradesForPnL.length > 0 && balances.length > 0) {
-      console.log('[PortfolioView] Recalculating P/L with balances:', balances.length);
-      calculatePnL();
-    }
-  }, [tradesForPnL, balances]);
+    calculatePnL();
+  }, []);
 
   const filteredTrades = tradeHistory.filter((t) => {
     if (filter === 'buy') return t.type === 'BUY';
@@ -355,6 +346,7 @@ export function PortfolioView() {
                   <th className="text-right text-xs text-slate-400 py-2">Value (IDR)</th>
                   <th className="text-right text-xs text-slate-400 py-2">P/L (IDR)</th>
                   <th className="text-right text-xs text-slate-400 py-2">P/L %</th>
+                  <th className="text-right text-xs text-slate-400 py-2">TP Status</th>
                 </tr>
               </thead>
               <tbody>

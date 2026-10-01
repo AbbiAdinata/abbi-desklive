@@ -14,7 +14,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const crypto = require('crypto');
-const { startAutoScanner, getScreeningData } = require('./engine/AutoScanner');
+const { startAutoScanner, getScreeningData, getPositionsData } = require('./engine/AutoScanner');
 
 const app = express();
 
@@ -614,6 +614,24 @@ app.get('/api/screening', (req, res) => {
     });
   } catch (err) {
     console.error('[Screening API] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// POSITIONS API — Data posisi aktif + TP status untuk Frontend
+// ═══════════════════════════════════════════════════════════════
+app.get('/api/positions', (req, res) => {
+  try {
+    const data = getPositionsData();
+    res.json({
+      success: true,
+      positions: data.positions,
+      totalPositions: data.totalPositions,
+      timestamp: data.timestamp,
+    });
+  } catch (err) {
+    console.error('[Positions API] Error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
